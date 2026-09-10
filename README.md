@@ -1,23 +1,27 @@
 # sercon
 
-串口设备插在跳板机上，跳板机在另一个网段。sercon 让本机的 `minicom` 等价物连到
-那根线：客户端跑在你的机器上，守护进程跑在跳板机上，两端用 SSH 传输。
+sercon 是一套通过 SSH 访问远程串口的工具。串口设备物理连接在跳板机上，当跳板机与
+开发机不在同一网段、本地终端程序无法直接访问该串口时，由 sercon 提供等效的访问能力。
+
+sercon 由两个进程组成：客户端 `sercon` 运行在本地主机上，提供终端交互；守护进程
+`sercond` 运行在跳板机上，持有串口设备。两者之间的通信通过 SSH 承载，因此无需在
+跳板机上部署常驻服务或开放额外端口。
 
 ![sercon-gui](docs/images/sercon-gui.png)
 
 ## 安装
 
-跳板机（插着串口那台）：
+跳板机（连接串口的主机）：
 
 ```bash
 scp sercond-linux-amd64 you@jump:~/bin/sercond
 ssh you@jump 'chmod +x ~/bin/sercond && sudo usermod -aG dialout $USER'
 ```
 
-`dialout` 那步是必须的，串口设备权限是 `crw-rw---- root:dialout`。加完重新登录
-一次（组变更要新会话生效），否则端口能枚举到但全是 `offline`。
+`dialout` 组的添加是必需的，串口设备权限为 `crw-rw---- root:dialout`。组变更需要
+新会话才能生效，因此完成后须重新登录；否则端口虽能被枚举，但状态均为 `offline`。
 
-自己的机器：
+本地主机：
 
 ```bash
 install -m755 sercon-linux-amd64 ~/.local/bin/sercon
@@ -28,17 +32,17 @@ Windows 跳板机见 [Windows](#windows)。
 ## 用法
 
 ```bash
-sercon ls -t you@jump                  # 看有哪些口、谁占着
-sercon attach -t you@jump FT232R       # 连上去
+sercon ls -t you@jump                  # 列出端口及其占用情况
+sercon attach -t you@jump FT232R       # 建立交互式连接
 ```
 
-`sercond` 装在 `~/bin` 而它不在远程 PATH 上时，加 `--remote-bin`：
+当 `sercond` 安装于 `~/bin` 而该目录不在远程 PATH 中时，需指定 `--remote-bin`：
 
 ```bash
 sercon attach -t you@jump --remote-bin '~/bin/sercond' FT232R
 ```
 
-`~` 要留在引号外面，否则远程 shell 不展开它。
+`~` 必须置于引号之外，否则远程 shell 不会展开。
 
 ### 命令
 
@@ -48,62 +52,67 @@ sercon attach -t you@jump --remote-bin '~/bin/sercond' FT232R
 | `sercon attach -t HOST PORT` | 交互式连接 |
 | `sercon run -t HOST PORT` | 脚本化会话 |
 | `sercon status -t HOST` | 守护进程状态 |
-| `sercon stop -t HOST` | 停掉守护进程 |
+| `sercon stop -t HOST` | 停止守护进程 |
 
-五个命令都吃 `~/.ssh/config` 的别名，所以 `-t jump` 就够了，ProxyJump 交给 SSH。
+五个命令均支持 `~/.ssh/config` 中定义的别名，因此 `-t jump` 即可，ProxyJump 由
+SSH 处理。
 
-`PORT` 可以只写能唯一识别的前缀，比如 `usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0`
-写 `FT232R` 就行。匹配到多个会报错并列出候选。
+`PORT` 可以只写能唯一识别的前缀。例如端口引用为
+`usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0` 时，写 `FT232R` 即可。若匹配到多个
+端口，程序会报错并列出候选，不会自行选择。
 
 ### attach
 
 | 选项 | 作用 |
 |---|---|
-| `--observe` | 只读旁观，不抢写权限 |
-| `--log FILE` | 本地也留一份 |
-| `--no-reconnect` | 断了不重连 |
+| `--observe` | 只读旁观，不获取写权限 |
+| `--log FILE` | 同时在本地保留一份日志 |
+| `--no-reconnect` | 断线后不重连 |
 | `--baud N` | 覆盖波特率 |
 
-默认断线自动重连。旁观者收得到输出但键盘输入不转发，所以不会两个人一起往
-console 里敲字。
+默认在断线后自动重连。旁观者可以接收输出，但键盘输入不会被转发，因此不会出现
+两人同时向 console 输入的情况。
 
-`Ctrl-A` 是转义键，对齐 minicom：`Ctrl-A x` 退出，`Ctrl-A a` 发送字面量 Ctrl-A，
-`Ctrl-A l` 开关本地日志，`Ctrl-A r` 重连，`Ctrl-A b` 发 break，`Ctrl-A ?` 帮助。
+`Ctrl-A` 是转义键，键位与 minicom 对齐：`Ctrl-A x` 退出，`Ctrl-A a` 发送字面量
+Ctrl-A，`Ctrl-A l` 开关本地日志，`Ctrl-A r` 重连，`Ctrl-A b` 发送 break，
+`Ctrl-A ?` 显示帮助。
 
 ### 管道
 
-`attach` 不需要终端。stdin 不是 TTY 时不进 raw 模式、不认转义键、不往 stdout 写
-任何装饰，行为对齐本机设备：
+`attach` 不要求 stdin 是终端。当 stdin 不是 TTY 时，程序不进入 raw 模式、不解析
+转义键、不向 stdout 写入任何装饰性输出，行为与直接访问本地设备一致：
 
 ```bash
-# 抓一段，像 cat /dev/ttyUSB1，Ctrl-C 结束
+# 采集一段输出，等价于 cat /dev/ttyUSB1，按 Ctrl-C 结束
 sercon attach -t jump FT232R < /dev/null | head -50
 
-# 等一个关键字
+# 等待指定关键字出现
 sercon attach -t jump FT232R < /dev/null | grep -m1 panic
 
-# 落盘
+# 写入文件
 sercon attach -t jump FT232R < /dev/null >> bench01.log
 
-# 写，像 echo -e '\r' > /dev/ttyUSB1，写完就退
+# 写入数据，等价于 echo -e '\r' > /dev/ttyUSB1，发送后即退出
 sercon run -t jump FT232R --send '\r' --quiet
 
-# 写进去再等回复
+# 写入并等待响应
 sercon run -t jump FT232R --send 'reboot\r' --expect 'Restarting system' --timeout 60s
 ```
 
-两点和本地设备的差别：
+与本地设备相比有两点差异：
 
-- **`attach` 读到链路断为止。** `cat /dev/ttyUSB1 </dev/null` 也是这个行为——stdin
-  关掉只说明没人再输入，不代表该停止读。管道模式下不自动重连，断了就结束
-- **往里写用 `run --send`。** 它配 `--expect` 还能等到回复再退，比裸写更实用
+- **`attach` 持续读取直到链路断开。** `cat /dev/ttyUSB1 </dev/null` 的行为相同：
+  stdin 关闭仅表示不再有输入，不代表应当停止读取。管道模式下不自动重连，链路断开
+  即结束
+- **写入使用 `run --send`。** 配合 `--expect` 可以等待响应后再退出，比直接写入更
+  便于脚本使用
 
-stdout 只有 console 数据，端口名、日志路径这些提示走 stderr，所以重定向和管道都
+stdout 仅承载 console 数据。端口名、日志路径等信息输出到 stderr，因此重定向和管道
 不会被污染。
 
 ### run
 
-重启目标机并抓完整 boot log：
+重启目标机并采集完整的 boot log：
 
 ```bash
 sercon run -t jump FT232R \
@@ -111,22 +120,22 @@ sercon run -t jump FT232R \
   --out bench01-boot.log --timeout 90s
 ```
 
-不写脚本也可以：
+也可以不使用脚本文件：
 
 ```bash
 sercon run -t jump FT232R --send '\r' --expect 'login:' --expect '#' --timeout 30s
 ```
 
-脚本语法四条：
+脚本语法共四条：
 
 ```
 send <text>      写文本，支持 \r \n \t \0 \\ \xHH
 sendln <text>    写文本并追加 CRLF
-wait <regex>     阻塞等正则出现
+wait <regex>     阻塞等待正则匹配
 sleep 2s         暂停
 ```
 
-`--expect` 没等到会报错并以非零退出：
+`--expect` 未匹配到时会报错并以非零状态退出：
 
 ```
 sercon: --expect #1: pattern not seen before the timeout: ZZZZ_NOMATCH
@@ -134,7 +143,7 @@ sercon: --expect #1: pattern not seen before the timeout: ZZZZ_NOMATCH
 
 ## 日志
 
-日志由守护进程写，与有没有客户端连接无关。
+日志由守护进程写入，与是否存在客户端连接无关。
 
 | 内容 | 位置 |
 |---|---|
@@ -145,13 +154,13 @@ sercon: --expect #1: pattern not seen before the timeout: ZZZZ_NOMATCH
 | socket | Linux `$XDG_RUNTIME_DIR/sercon/run/s.sock` |
 | | Windows `%LOCALAPPDATA%\sercon\run\s.sock` |
 
-按天换文件，只追加不删，轮转交给 logrotate。
+日志按天分文件，只追加不删除，轮转由 logrotate 负责。
 
 ```
 2026-09-10 16:24:47.915 [177721.712505] ncsi-ioctl: NCSI_SEND_CMD_GET_RESPONSE failed
 ```
 
-审计是 JSONL，一行一个事件：
+审计流水为 JSONL 格式，每行一个事件：
 
 ```json
 {"ts":"2026-09-10T16:22:21.40+08:00","event":"session_open","user":"lucas","client":"DESKTOP-ROD9JT0","session":"516954b3"}
@@ -160,8 +169,8 @@ sercon: --expect #1: pattern not seen before the timeout: ZZZZ_NOMATCH
 
 ## 配置
 
-`~/.config/sercon/config.json`，Windows 是 `%APPDATA%\sercon\config.json`。
-全部可省略。
+`~/.config/sercon/config.json`，Windows 下为 `%APPDATA%\sercon\config.json`。
+所有字段均可省略。
 
 ```json
 {
@@ -176,111 +185,118 @@ sercon: --expect #1: pattern not seen before the timeout: ZZZZ_NOMATCH
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `baud` | 115200 | 默认波特率 |
-| `auto_open` | true | 启动就打开所有端口 |
-| `stamp_logs` | true | 日志行首加时间戳，关掉可被终端模拟器原样回放 |
+| `auto_open` | true | 启动时打开所有已发现的端口 |
+| `stamp_logs` | true | 日志行首添加时间戳；关闭后可被终端模拟器原样回放 |
 | `allow_observe` | true | 允许只读旁观 |
-| `max_observers` | 4 | 每端口旁观者上限，0 不限 |
+| `max_observers` | 4 | 每端口旁观者上限，0 表示不限制 |
 | `scan_globs` | — | Linux 上额外扫描的路径 |
 | `log_dir` / `audit_dir` | — | 覆盖默认位置 |
 | `ports[]` | — | 逐端口固定 `ref` / `desc` / `baud` |
 
-`desc` 可以直接当 `attach` 的引用用。实际可用的 `ref` 看 `sercon ls -t jump --json`。
+`desc` 可直接用作 `attach` 的端口引用。实际可用的 `ref` 可通过
+`sercon ls -t jump --json` 查看。
 
-改完配置要 `sercon stop -t jump` 重启才生效。
+修改配置后需执行 `sercon stop -t jump`，重启守护进程后方生效。
 
 ## Windows
 
-Windows 跳板机上有两个二进制，分工不同：
+Windows 跳板机上需要部署两个二进制文件，职责不同：
 
-| 文件 | 角色 | 谁启动 |
+| 文件 | 角色 | 启动方式 |
 |---|---|---|
-| `sercon-gui.exe` | 带窗口的守护进程，持有串口 | 双击，或放启动文件夹 |
-| `sercond.exe`（发布包里的 `sercond-windows-amd64.exe`） | `session` / `list` / `status` / `stop` | SSH 拉起 |
+| `sercon-gui.exe` | 带窗口的守护进程，持有串口 | 双击，或置于启动文件夹 |
+| `sercond.exe`（发布包中为 `sercond-windows-amd64.exe`） | `session` / `list` / `status` / `stop` | 由 SSH 拉起 |
 
-两个都要放。只有 GUI 的话 SSH 那侧没有可执行的子命令；只有 CLI 的话守护进程得靠
-`sercond capture` 以前台方式手动起。`sercon-gui.exe.manifest` 和 exe 放同一目录。
+两者缺一不可。只有 GUI 时，SSH 侧缺少可调用的子命令；只有 CLI 时没有窗口，需通过
+`sercond capture` 以前台方式手动启动守护进程。`sercon-gui.exe.manifest` 须与 exe
+置于同一目录。
 
-窗口里是端口表，底下一排按钮：打开日志目录、复制 attach 命令、SSH keys、立即重扫。
-窗口开着就在抓日志，关掉就停，没有单独的开关。`sercon stop -t winjump` 会把窗口
-关掉，不是只回一个确认。
+主窗口显示端口列表，底部提供四个按钮：打开日志目录、复制 attach 命令、SSH keys、
+立即重扫。窗口打开期间持续采集日志，关闭即停止，没有独立的启停开关。
+`sercon stop -t winjump` 会关闭该窗口，而不仅是返回确认。
 
-GUI 必须在交互桌面上启动。SSH 会话里启动的进程画不出窗口，看得见进程看不见界面。
-要么双击，要么放启动文件夹（`Win+R` → `shell:startup`）。
+GUI 必须在交互式桌面会话中启动。SSH 会话启动的进程无法绘制窗口，表现为进程存在但
+界面不可见。应通过双击或置于启动文件夹（`Win+R` → `shell:startup`）启动。
 
 ### SSH keys
 
-`SSH keys` 按钮装客户端公钥，省得手改 `authorized_keys`。
+`SSH keys` 按钮用于安装客户端公钥，避免手工编辑 `authorized_keys`。
 
-Windows 上这件事有两个坑，出错都报同一句 `Permission denied (publickey)`：文件位置
-取决于账号是不是管理员，而管理员那个文件还必须收紧 ACL。面板两件都做了。
+Windows 上有两个容易出错的点，且都表现为同一条 `Permission denied (publickey)`：
+密钥文件的位置取决于账号是否为管理员；管理员所用的文件还必须收紧 ACL。该面板同时
+处理这两项。
 
-管理员账号要写的是：
+管理员账号应写入的文件是：
 
 ```
 C:\ProgramData\ssh\administrators_authorized_keys
 ```
 
-不是 `%USERPROFILE%\.ssh\authorized_keys`。默认的 `sshd_config` 末尾有这么一段：
+而非 `%USERPROFILE%\.ssh\authorized_keys`。默认 `sshd_config` 末尾包含以下配置：
 
 ```
 Match Group administrators
        AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys
 ```
 
-所以往 `~/.ssh/authorized_keys` 里写，看起来很对，但 sshd 根本不读。面板会根据账号
-自动选对文件，并在顶部把路径显示出来。
+因此写入 `~/.ssh/authorized_keys` 看似正确，但 sshd 不会读取该文件。面板会根据账号
+自动选择正确的文件，并在顶部显示其路径。
 
-那个文件的 ACL 必须只有 `SYSTEM` 和 `Administrators`，sshd 才肯读——能改这个文件
-的人就能以任何身份登录。面板写完会自己收紧。
+该文件的 ACL 必须仅包含 `SYSTEM` 和 `Administrators`，sshd 才会读取——能够修改此
+文件的人即可以任意身份登录。面板在写入后会自动收紧 ACL。
 
-两条路径都要管理员权限，所以「Add key」和「Reload」会弹 UAC。GUI 本身不提权：
-串口守护进程不该要管理员，提权只发生在写这一个文件的时候。
+两个操作路径都需要管理员权限，因此「Add key」和「Reload」会触发 UAC 提示。GUI 本身
+不提权：串口守护进程不应以管理员身份运行，提权仅发生在写入该文件时。
 
-改动立即生效，不用重启 sshd。
+改动立即生效，无需重启 sshd。
 
-挂载点这一侧还需要装 OpenSSH Server 并放行防火墙，见
+跳板机侧还需安装 OpenSSH Server 并放行防火墙，参见
 [`deployment.md`](docs/deployment.md#windows-跳板机)。
 
-Windows 上用 COM 号直接引用端口，`sercon attach -t winjump COM3`。
+Windows 上直接以 COM 号引用端口：`sercon attach -t winjump COM3`。
 
-日志目录名会带下划线：
+日志目录名中包含下划线：
 
 ```
 %LOCALAPPDATA%\sercon\ports\COM1_\2026-09-10.log
                               ^^^
 ```
 
-`COM1` 到 `COM9` 是 Windows 保留设备名，`mkdir COM1` 直接失败，所以转义成
-`COM1_`。`COM10` 及以上不是保留名，所以这个失败会随机器上用过的适配器数量
-时有时无。日志内容里的头部仍写 `port=COM1`。
+`COM1` 至 `COM9` 是 Windows 保留设备名，`mkdir COM1` 会直接失败，因此转义为
+`COM1_`。`COM10` 及以上不是保留名，因此该问题是否出现取决于机器上曾经使用过的
+适配器数量，并不稳定。日志内容中的头部仍写 `port=COM1`。
 
 ## 排错
 
-**端口全是 `offline`。** Linux 上基本是 dialout 权限，`id | grep dialout` 确认，
-不在组里就 `sudo usermod -aG dialout $USER` 然后重新登录。具体原因看
-`sercon ls -t jump --json` 的 `last_err` 字段，表格输出里没这列。
+**端口状态全部为 `offline`。** Linux 上通常由 dialout 权限引起，用
+`id | grep dialout` 确认，不在组内则执行 `sudo usermod -aG dialout $USER` 并重新
+登录。具体原因可查看 `sercon ls -t jump --json` 输出的 `last_err` 字段，表格输出
+中不包含该列。
 
-**每条命令前面被塞了三行 SSH 警告。** 跳板机 OpenSSH 太老（Ubuntu 20.04 的 8.2、
-22.04 的 8.9 都没有后量子密钥交换），stderr 被转发到终端了。加一行就好：
+**每条命令前被追加了三行 SSH 警告。** 跳板机的 OpenSSH 版本较旧（Ubuntu 20.04 的
+8.2 与 22.04 的 8.9 均不支持后量子密钥交换），其 stderr 被转发至终端。添加以下配置
+即可消除：
 
 ```
 Host jump
     LogLevel ERROR
 ```
 
-**`sercond: command not found`。** 不在远程 PATH 上，用 `--remote-bin` 指路径。
+**`sercond: command not found`。** `sercond` 不在远程 PATH 中，使用 `--remote-bin`
+指定其路径。
 
-**`sercon stop` 之后端口还在抓。** socket 按用户隔离，确认连的是同一台机器的
-同一个用户。
+**`sercon stop` 之后端口仍在采集。** socket 按用户隔离，确认连接的是同一台主机上的
+同一用户。
 
 ## 构建
 
 ```bash
 make build                          # 全平台 + 版本注入 + GUI
-go build -o sercond ./cmd/sercond   # 只要本机
+go build -o sercond ./cmd/sercond   # 仅当前平台
 ```
 
-版本号只有 `internal/version` 一个来源，链接时注入。裸 `go build` 显示 `devel`：
+版本号以 `internal/version` 为唯一来源，在链接时注入。直接使用 `go build` 会显示
+`devel`：
 
 ```
 $ ./sercond version
@@ -292,36 +308,36 @@ sercond devel (protocol v1, go1.27.1, linux/amd64)
 ```bash
 go test ./...
 
-# 真硬件，会占用端口并拉高 DTR/RTS
+# 真实硬件测试，会占用端口并拉高 DTR/RTS
 SERCON_TEST_HARDWARE=1 SERCON_TEST_PORT=COM1 go test ./internal/serialport/ -v
 ```
 
-硬件测试默认跳过，免得在你接了重要设备的机器上抢串口。
+硬件测试默认跳过，以避免在接有重要设备的机器上占用串口。
 
 ## 发布
 
-打 tag 就是发布：
+打 tag 即触发发布：
 
 ```bash
 git tag -a v0.1.0 -m "first release"
 git push origin v0.1.0
 ```
 
-CI 会构建全平台、生成校验和、建 Release，并校验二进制报告的版本和 tag 一致。
+CI 会构建全平台产物、生成校验和、创建 Release，并校验二进制上报的版本与 tag 一致。
 
 ## 状态
 
-Ubuntu 20.04 / kernel 5.15 上，两个 FTDI 适配器（其中一个接 BMC 串口）实测过：
-SSH 传输、脱离会话、termios + epoll 打开硬件、by-id 枚举、模糊匹配、读路径落盘、
-拔线检测与自动重连、日志连续性、交互式 attach、审计流水。
+已在 Ubuntu 20.04 / kernel 5.15 上通过真实硬件验证（两个 FTDI 适配器，其中一个
+连接 BMC 串口）：SSH 传输、脱离会话、termios + epoll 打开硬件、by-id 枚举、模糊
+匹配、读路径落盘、拔线检测与自动重连、日志连续性、交互式 attach、审计流水。
 
-没验过的两条：
+尚未验证的两项：
 
-- Linux 写路径只验到调用没报错。两个适配器都没接能回显的设备，也没有回环插头，
-  所以「字节真的到达目标机」这一条没确认。读路径不受影响。
-- Windows 拔线检测没实测。逻辑和 Linux 侧一样，但没真拔过线。
+- Linux 写路径仅验证到调用未报错。两个适配器均未连接可回显的设备，也没有回环插头，
+  因此「字节是否真正送达目标机」未得到确认。读路径不受影响。
+- Windows 拔线检测未实测。逻辑与 Linux 侧一致，但未进行真实的拔线操作。
 
-细节见 [`docs/deployment.md`](docs/deployment.md)。
+详细记录见 [`docs/deployment.md`](docs/deployment.md)。
 
 ## 文档
 

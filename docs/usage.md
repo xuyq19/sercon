@@ -1,6 +1,6 @@
 # 使用手册
 
-完整参数说明。快速上手看 [`../README.md`](../README.md)。
+完整的参数说明。快速上手参见 [`../README.md`](../README.md)。
 
 ## 目录
 
@@ -17,38 +17,38 @@
 
 ## 前提
 
-跳板机上有 `sercond`，你的用户在 `dialout` 组里：
+跳板机上需有 `sercond`，且执行用户已加入 `dialout` 组：
 
 ```bash
 scp sercond-linux-amd64 you@jump:~/bin/sercond
 ssh you@jump 'chmod +x ~/bin/sercond && sudo usermod -aG dialout $USER'
 ```
 
-组变更要新会话生效，所以改完重新登录一次。
+组变更需要新会话才能生效，因此完成后须重新登录。
 
-自己机器上有 `sercon`：
+本地主机上需有 `sercon`：
 
 ```bash
 install -m755 sercon-linux-amd64 ~/.local/bin/sercon
 ```
 
-`sercond` 装在 `~/bin` 时它通常不在非交互式 SSH 的 PATH 上，客户端要带
-`--remote-bin`。嫌烦的话把 `~/bin` 加进远程 PATH，或者配个别名。
+`sercond` 安装于 `~/bin` 时，该目录通常不在非交互式 SSH 的 PATH 中，客户端需指定
+`--remote-bin`。也可以将 `~/bin` 加入远程 PATH，或配置别名。
 
 ## 连接参数
 
-四个子命令共享：
+五个子命令共用的参数：
 
 | 参数 | 说明 |
 |---|---|
-| `-t, --target` | SSH 目标，`user@host`，必填。吃 `~/.ssh/config` 的别名 |
+| `-t, --target` | SSH 目标，`user@host`，必填。支持 `~/.ssh/config` 的别名 |
 | `--ssh-port N` | SSH 端口 |
 | `--ssh-opt K=V` | 额外的 `ssh -o` 选项，可重复 |
-| `--remote-bin PATH` | 跳板机上 `sercond` 的路径，默认 `sercond` |
+| `--remote-bin PATH` | 跳板机上 `sercond` 的路径，默认为 `sercond` |
 | `--remote-socket PATH` | 覆盖守护进程 socket 路径 |
-| `--ssh-bin PATH` | 用哪个 ssh 客户端，默认 `ssh`。装了多个 OpenSSH 时用全路径 |
+| `--ssh-bin PATH` | 指定使用的 ssh 客户端，默认为 `ssh`。安装有多个 OpenSSH 时应使用完整路径 |
 
-`-t` 吃 ssh 配置，所以这样写就够了：
+`-t` 支持 ssh 配置，因此按下列方式编写即可：
 
 ```
 # ~/.ssh/config
@@ -63,7 +63,7 @@ Host jump
 sercon attach -t jump FT232R
 ```
 
-要穿跳板的话 `ProxyJump` 交给 SSH，sercon 不关心。
+需要穿越跳板机时，`ProxyJump` 由 SSH 处理，sercon 不介入。
 
 ## ls
 
@@ -79,21 +79,21 @@ usb-FTDI_USB__-__Serial-if00-port0            /dev/ttyUSB0  115200  online  -   
 
 | 列 | 含义 |
 |---|---|
-| `REF` | 端口引用，`attach` 时用它 |
+| `REF` | 端口引用，`attach` 时使用 |
 | `DEV` | 设备路径 |
 | `BAUD` | 当前波特率 |
 | `STATE` | `online` 或 `offline` |
-| `OWNER` | 持有写权限的用户，`-` 表示没人持有 |
+| `OWNER` | 持有写权限的用户，`-` 表示无人持有 |
 | `OBS` | 观察者数量 |
-| `DESC` | 配置里的标签 |
+| `DESC` | 配置中的标签 |
 
-`--json` 输出机器可读版本：
+`--json` 输出机器可读的版本：
 
 ```bash
 sercon ls -t jump --json | jq '.[] | select(.state=="offline") | .ref'
 ```
 
-JSON 里有 `last_err` 字段，端口打不开的原因写在那儿，表格输出里没这列。
+JSON 中包含 `last_err` 字段，记录端口无法打开的原因；表格输出中不包含该列。
 
 ## attach
 
@@ -101,15 +101,15 @@ JSON 里有 `last_err` 字段，端口打不开的原因写在那儿，表格输
 sercon attach -t you@jump FT232R
 ```
 
-连上后终端进原始模式，按键直接进串口，Ctrl-C 之类不会打断 sercon。退出用
-`Ctrl-A x`。
+连接建立后终端进入原始模式，按键被直接送往串口，Ctrl-C 等组合键不会中断 sercon。
+退出使用 `Ctrl-A x`。
 
 | 选项 | 说明 |
 |---|---|
-| `--baud N` | 本次连接的波特率，覆盖守护进程默认值 |
-| `--observe` | 只读旁观，不抢写权限 |
-| `--log FILE` | 本地也写一份 |
-| `--no-reconnect` | 断线直接退出 |
+| `--baud N` | 本次连接的波特率，覆盖守护进程的默认值 |
+| `--observe` | 只读旁观，不获取写权限 |
+| `--log FILE` | 同时在本地保留一份日志 |
+| `--no-reconnect` | 断线后直接退出 |
 
 ### 只读旁观
 
@@ -117,53 +117,54 @@ sercon attach -t you@jump FT232R
 sercon attach -t jump FT232R --observe
 ```
 
-旁观者收得到串口输出，键盘输入不转发。上限由跳板机配置的 `max_observers`
-控制，默认 4。
+旁观者可以接收串口输出，键盘输入不会被转发。数量上限由跳板机配置的
+`max_observers` 控制，默认为 4。
 
 ### 断线重连
 
-默认每次都自动重连，指数退避，重连后重新 open 原端口，终端上打一行恢复标记。
+默认情况下每次断线都会自动重连，采用指数退避，重连后重新打开原端口，并在终端
+输出一行恢复标记。
 
-脚本里想要明确失败就用 `--no-reconnect`。
+脚本中若需在断线时明确失败，应使用 `--no-reconnect`。
 
-**stdin 不是终端时永远不重连**，等于隐式加上了 `--no-reconnect`。理由见下面的
-管道一节。
+**stdin 不是终端时不会重连**，相当于隐式启用了 `--no-reconnect`。原因见下节。
 
 ### 管道
 
-`attach` 不需要终端。stdin 不是 TTY 时它不进 raw 模式、不认 Ctrl-A、不往 stdout
-写任何装饰，就是纯粹的字节搬运。行为对齐本机设备：
+`attach` 不要求 stdin 是终端。当 stdin 不是 TTY 时，程序不进入 raw 模式、不解析
+Ctrl-A、不向 stdout 写入任何装饰性输出，仅进行字节搬运，行为与直接访问本地设备
+一致：
 
 ```bash
-# 像 cat /dev/ttyUSB1，Ctrl-C 结束
+# 等价于 cat /dev/ttyUSB1，按 Ctrl-C 结束
 sercon attach -t jump FT232R < /dev/null
 
-# 抓 50 行
+# 采集 50 行
 sercon attach -t jump FT232R < /dev/null | head -50
 
-# 等关键字，等到就退
+# 等待关键字出现，匹配后退出
 sercon attach -t jump FT232R < /dev/null | grep -m1 panic
 
-# 追加到文件
+# 追加写入文件
 sercon attach -t jump FT232R < /dev/null >> bench01.log
 ```
 
-**stdin 关闭不等于读结束。** 管道里 stdin 到 EOF 只是说明没人再输入了，链路仍然
-在收数据——所以 `< /dev/null` 会一直读到链路断开或者你打断它，和
-`cat /dev/ttyUSB1 </dev/null` 一样。
+**stdin 关闭不等于读取结束。** 管道中 stdin 到达 EOF 仅表示不再有输入，链路仍在
+接收数据，因此 `< /dev/null` 会持续读取直到链路断开或被中断，与
+`cat /dev/ttyUSB1 </dev/null` 的行为相同。
 
-**往里写用 `run --send`**，不是 `attach`：
+**写入应使用 `run --send`**，而非 `attach`：
 
 ```bash
-sercon run -t jump FT232R --send '\r' --quiet                     # 写完就退
+sercon run -t jump FT232R --send '\r' --quiet                     # 发送后退出
 sercon run -t jump FT232R --send 'reboot\r' --expect 'login:' --timeout 60s
 ```
 
-`attach` 之所以不适合写，是形态上分不出「写完就退」和「读到底」这两种意图——
-两者都是一根管道。需要哪个由用哪个子命令来表达。
+`attach` 不适合用于写入，原因是它在形态上无法区分「发送后退出」和「持续读取到
+结束」这两种意图——两者都是一根管道。具体使用哪种由子命令来区分。
 
-stdout 只承载 console 数据。「已连接端口 X」「日志在 Y」这类提示在非终端模式下
-走 stderr，所以重定向和管道都不会被污染。
+stdout 仅承载 console 数据。「已连接端口 X」「日志位于 Y」一类提示在非终端模式下
+输出到 stderr，因此重定向和管道不会被污染。
 
 ### Ctrl-A
 
@@ -177,11 +178,11 @@ stdout 只承载 console 数据。「已连接端口 X」「日志在 Y」这类
 | `Ctrl-A s` | 会话状态 |
 | `Ctrl-A ?` | 帮助 |
 
-往目标机发真正的 `0x01` 要用 `Ctrl-A a`，否则会被当成转义前缀。
+向目标机发送真正的 `0x01` 需使用 `Ctrl-A a`，否则会被识别为转义前缀。
 
 ## run
 
-### 直接给参数
+### 直接传入参数
 
 ```bash
 sercon run -t jump FT232R \
@@ -192,9 +193,9 @@ sercon run -t jump FT232R \
   --out session.log
 ```
 
-`--expect` 可重复，按顺序匹配，每个有自己的 timeout。
+`--expect` 可重复，按顺序匹配，每个都有各自的 timeout。
 
-### 用脚本文件
+### 使用脚本文件
 
 ```bash
 sercon run -t jump FT232R \
@@ -204,28 +205,28 @@ sercon run -t jump FT232R \
 
 | 指令 | 说明 |
 |---|---|
-| `send <text>` | 写文本，支持 `\r` `\n` `\t` `\0` `\\` `\xHH` |
-| `sendln <text>` | 写文本并追加 CRLF |
-| `wait <regex>` | 阻塞等正则出现 |
+| `send <text>` | 写入文本，支持 `\r` `\n` `\t` `\0` `\\` `\xHH` |
+| `sendln <text>` | 写入文本并追加 CRLF |
+| `wait <regex>` | 阻塞等待正则匹配 |
 | `sleep 2s` | 暂停 |
 
-`#` 开头是注释。`wait` 的匹配起点接着上一次匹配的结尾，所以同一个模式能连等
-两次（等第一次启动的 `login:`，再等重启后的 `login:`）。
+以 `#` 开头的行为注释。`wait` 的匹配起点接续上一次匹配的结尾，因此同一模式可以
+连续等待两次（先等首次启动的 `login:`，再等重启后的 `login:`）。
 
-`examples/reboot-capture.script` 是完整例子。
+`examples/reboot-capture.script` 是完整的例子。
 
 ### 选项
 
 | 选项 | 说明 |
 |---|---|
 | `--script FILE` | 脚本文件 |
-| `--send TEXT` | 在所有 wait 之前发一次文本 |
-| `--expect REGEX` | 等正则，可重复，按顺序 |
-| `--timeout DUR` | 每个 wait 的超时，默认 `60s` |
-| `--out FILE` | 存下收到的所有数据 |
-| `--quiet` | 不回显到 stdout |
+| `--send TEXT` | 在所有 wait 之前发送一次文本 |
+| `--expect REGEX` | 等待正则匹配，可重复，按顺序 |
+| `--timeout DUR` | 每个 wait 的超时，默认为 `60s` |
+| `--out FILE` | 保存收到的所有数据 |
+| `--quiet` | 不向 stdout 回显 |
 
-`--expect` 没等到会报错并以非零退出，不会静默返回空文件：
+`--expect` 未匹配到时会报错并以非零状态退出，不会静默返回空文件：
 
 ```
 $ sercon run -t jump FT232R --send '\r' --expect 'ZZZZ_NOMATCH' --timeout 3s
@@ -248,22 +249,22 @@ ports    2 (2 online, 0 held)
 sercon stop -t jump
 ```
 
-Windows GUI 版本收到 stop 会真的关窗口。
+Windows GUI 版本收到 stop 后会实际关闭窗口。
 
 ## 端口引用匹配
 
 ```bash
-# 完整 by-id 引用
+# 完整的 by-id 引用
 sercon attach -t jump usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0
 
-# 配置里的 desc
+# 配置中的 desc
 sercon attach -t jump WR5220-G5-bmc
 
 # 能唯一识别的前缀
 sercon attach -t jump FT232R
 ```
 
-匹配到多个会报错并列出候选，不会替你猜：
+匹配到多个端口时会报错并列出候选，不会自行选择：
 
 ```
 sercon: "FTDI" matches 2 ports:
@@ -271,7 +272,7 @@ sercon: "FTDI" matches 2 ports:
   usb-FTDI_USB__-__Serial-if00-port0
 ```
 
-Windows 上直接用 COM 号：`sercon attach -t winjump COM3`。
+Windows 上直接使用 COM 号：`sercon attach -t winjump COM3`。
 
 ## 日志与审计
 
@@ -284,7 +285,7 @@ Windows 上直接用 COM 号：`sercon attach -t winjump COM3`。
 | 守护进程诊断 | `<runtime>/daemon.log` | `<runtime>\daemon.log` |
 | socket | `$XDG_RUNTIME_DIR/sercon/run/s.sock` | `%LOCALAPPDATA%\sercon\run\s.sock` |
 
-`$XDG_STATE_HOME` 和 `$XDG_RUNTIME_DIR` 没设的话走上面的默认值。
+未设置 `$XDG_STATE_HOME` 和 `$XDG_RUNTIME_DIR` 时使用上表的默认值。
 
 ### 端口日志
 
@@ -292,14 +293,14 @@ Windows 上直接用 COM 号：`sercon attach -t winjump COM3`。
 2026-09-10 16:24:47.915 [177721.712505] ncsi-ioctl: NCSI_SEND_CMD_GET_RESPONSE failed
 ```
 
-按天换文件，只追加。文件开头有一行头部，记下当时的设备路径、端口引用和波特率，
-事后能确认这个文件对应哪根线。轮转交给 logrotate，sercon 不删文件。
+按天分文件，只追加写入。文件开头有一行头部，记录当时的设备路径、端口引用和波特率，
+便于事后确认文件与设备的对应关系。轮转由 logrotate 负责，sercon 不删除文件。
 
-`stamp_logs: false` 可以去掉时间戳前缀，这样日志能被终端模拟器原样回放。
+`stamp_logs: false` 可去除时间戳前缀，使日志能被终端模拟器原样回放。
 
 ### 审计流水
 
-JSONL，一行一个事件：
+JSONL 格式，每行一个事件：
 
 ```json
 {"ts":"2026-09-10T16:22:21.32+08:00","event":"port_online","port":"usb-FTDI_FT232R_...","dev":"/dev/ttyUSB1","detail":"baud=115200"}
@@ -311,9 +312,9 @@ JSONL，一行一个事件：
 事件类型：`session_open` `session_close` `port_open` `port_close`
 `port_online` `port_offline`。
 
-`detail` 里 `writable` / `observe` 区分写权限和旁观，写入字节数也记在这儿。
+`detail` 中的 `writable` / `observe` 用于区分写权限和旁观，写入字节数也记录在此。
 
-查询今天谁动过 console：
+查询当天对 console 的操作记录：
 
 ```bash
 jq -r 'select(.event=="port_open") | "\(.ts) \(.user)@\(.client) -> \(.port)"' \
@@ -322,16 +323,16 @@ jq -r 'select(.event=="port_open") | "\(.ts) \(.user)@\(.client) -> \(.port)"' \
 
 ## 配置
 
-`~/.config/sercon/config.json`，Windows 是 `%APPDATA%\sercon\config.json`。全部
-可省略，完整样例 `examples/config.json`。
+`~/.config/sercon/config.json`，Windows 下为 `%APPDATA%\sercon\config.json`。所有
+字段均可省略，完整样例见 `examples/config.json`。
 
 | 字段 | 类型 | 默认 | 说明 |
 |---|---|---|---|
 | `baud` | int | `115200` | 默认波特率 |
-| `auto_open` | bool | `true` | 启动就打开所有发现的端口 |
-| `stamp_logs` | bool | `true` | 日志行首加时间戳 |
+| `auto_open` | bool | `true` | 启动时打开所有已发现的端口 |
+| `stamp_logs` | bool | `true` | 日志行首添加时间戳 |
 | `allow_observe` | bool | `true` | 允许只读旁观 |
-| `max_observers` | int | `4` | 每端口旁观者上限，0 不限 |
+| `max_observers` | int | `4` | 每端口旁观者上限，0 表示不限制 |
 | `scan_globs` | []string | — | Linux 上额外扫描的路径 |
 | `log_dir` | string | 见上 | 覆盖日志根目录 |
 | `audit_dir` | string | 见上 | 覆盖审计根目录 |
@@ -343,32 +344,33 @@ jq -r 'select(.event=="port_open") | "\(.ts) \(.user)@\(.client) -> \(.port)"' \
   "baud": 115200 }
 ```
 
-`desc` 是给人看的标签，也能直接当 `attach` 的引用。`baud` 为单个口覆盖全局值。
+`desc` 是供人阅读的标签，也可直接用作 `attach` 的端口引用。`baud` 可为单个端口
+覆盖全局值。
 
-改完配置要重启守护进程：
+修改配置后需重启守护进程：
 
 ```bash
-sercon stop -t jump     # 下次连接自动拉起
+sercon stop -t jump     # 下次连接时自动拉起
 ```
 
 ## 排错
 
-### 端口全是 offline
+### 端口全部为 offline
 
-Linux 上基本是权限问题。串口设备是 `crw-rw---- root:dialout`：
+Linux 上通常由权限问题引起。串口设备的权限为 `crw-rw---- root:dialout`：
 
 ```bash
 ls -l /dev/ttyUSB0
 id | grep -o dialout
 ```
 
-不在组里就加上，然后重新登录：
+若不在组内，加入后重新登录：
 
 ```bash
 sudo usermod -aG dialout $USER
 ```
 
-具体原因看 `last_err`：
+具体原因可查看 `last_err`：
 
 ```bash
 sercon ls -t jump --json | jq '.[] | {ref, state, last_err}'
@@ -376,52 +378,53 @@ sercon ls -t jump --json | jq '.[] | {ref, state, last_err}'
 
 ### sercond: command not found
 
-不在跳板机的 PATH 上：
+`sercond` 不在跳板机的 PATH 中：
 
 ```bash
 sercon attach -t jump --remote-bin '~/bin/sercond' FT232R
 ```
 
-`~/` 要留在引号外面，否则远程 shell 不展开它。zsh 上尤其明显。
+`~/` 必须置于引号之外，否则远程 shell 不会展开。zsh 上尤其需要注意。
 
-### 每条命令前面被塞了三行 SSH 警告
+### 每条命令前被追加三行 SSH 警告
 
-跳板机 OpenSSH 太老（Ubuntu 20.04 的 8.2、22.04 的 8.9 都没有后量子密钥交换），
-stderr 被转发到终端了。
+跳板机的 OpenSSH 版本较旧（Ubuntu 20.04 的 8.2、22.04 的 8.9 均不支持后量子密钥
+交换），其 stderr 被转发至终端。
 
 ```
 Host jump
     LogLevel ERROR
 ```
 
-真实错误是 ERROR 级别的，照常显示。
+真实错误属于 ERROR 级别，仍会正常显示。
 
-### stop 之后端口还在被抓
+### stop 之后端口仍在采集
 
-socket 按用户隔离，`lucas@jump` 和 `root@jump` 是两个独立的守护进程。确认连的是
-同一台机器上的同一个用户。
+socket 按用户隔离，`lucas@jump` 和 `root@jump` 是两个独立的守护进程。确认连接的是
+同一台主机上的同一用户。
 
-### 日志目录是空的
+### 日志目录为空
 
-先确认守护进程在跑：
+先确认守护进程正在运行：
 
 ```bash
 sercon status -t jump
 ```
 
-再确认端口是 `online`，`offline` 的端口没有新日志。
+再确认端口状态为 `online`；`offline` 的端口不会产生新日志。
 
-Windows 上目录名带下划线（`COM1_`）是正常的。
+Windows 上目录名包含下划线（`COM1_`）属于正常现象。
 
-### Windows GUI 打开了但没有窗口
+### Windows GUI 已启动但窗口不可见
 
-SSH 会话里启动的 GUI 画不出窗口，必须在交互桌面上双击，或者放进启动文件夹。
+在 SSH 会话中启动的 GUI 无法绘制窗口，必须在交互式桌面上双击启动，或置于启动
+文件夹。
 
-窗口没起来但进程在的话看 `<runtime>/gui.log`。
+若进程存在但窗口未出现，查看 `<runtime>/gui.log`。
 
-### 想看更多诊断
+### 查看更详细的诊断信息
 
-守护进程自己的诊断在 `<runtime>/daemon.log`。客户端可以打开 SSH 层日志：
+守护进程自身的诊断日志位于 `<runtime>/daemon.log`。客户端可开启 SSH 层日志：
 
 ```bash
 sercon attach -t jump --ssh-opt LogLevel=DEBUG FT232R
