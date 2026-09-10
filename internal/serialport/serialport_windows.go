@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -718,46 +717,9 @@ func Exists(path string) bool {
 	return false
 }
 
-// devicePath adds the \\.\ prefix the Win32 device namespace requires.
-//
-// It is not decoration. Without it, COM10 and above are parsed as ordinary
-// filenames, so the adapter simply never opens — a failure that only shows up
-// once a machine has enough ports.
-func devicePath(name string) string {
-	if strings.HasPrefix(name, `\\.\`) || strings.HasPrefix(name, `\\?\`) {
-		return name
-	}
-	if isComName(name) {
-		return `\\.\` + name
-	}
-	return name
-}
-
-func isComName(s string) bool {
-	u := strings.ToUpper(s)
-	if len(u) <= 3 || !strings.HasPrefix(u, "COM") {
-		return false
-	}
-	for i := 3; i < len(u); i++ {
-		if u[i] < '0' || u[i] > '9' {
-			return false
-		}
-	}
-	return true
-}
+// devicePath, isComName and comNumber live in comname.go — they are pure string
+// handling, so they stay testable on every platform.
 
 func shortDeviceName(p string) string {
 	return strings.TrimPrefix(p, `\Device\`)
-}
-
-func comNumber(name string) int {
-	u := strings.ToUpper(name)
-	if !strings.HasPrefix(u, "COM") {
-		return 1 << 30
-	}
-	n, err := strconv.Atoi(u[3:])
-	if err != nil {
-		return 1 << 30
-	}
-	return n
 }
