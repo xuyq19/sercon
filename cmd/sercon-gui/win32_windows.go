@@ -1,6 +1,6 @@
 //go:build windows
 
-// Win32 bindings for the seriald GUI.
+// Win32 bindings for the sercond GUI.
 //
 // Everything goes through syscall.NewLazyDLL rather than a GUI toolkit so that
 // the binary keeps the project's zero-dependency property. Each DLL is resolved

@@ -1,4 +1,4 @@
-"""Capture the seriald GUI window to a PNG.
+"""Capture the sercond GUI window to a PNG.
 
 Uses PrintWindow with PW_RENDERFULLCONTENT so only this window's own content is
 rendered into the bitmap. Nothing else on the desktop ends up in the image, and
@@ -21,7 +21,7 @@ PW_RENDERFULLCONTENT = 0x00000002
 BI_RGB = 0
 DIB_RGB_COLORS = 0
 
-CLASS_NAME = "serialdGuiWindow"
+CLASS_NAME = "sercondGuiWindow"
 
 
 class BITMAPINFOHEADER(ctypes.Structure):

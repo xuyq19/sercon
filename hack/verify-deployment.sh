@@ -1,12 +1,12 @@
 #!/bin/sh
-# Verify a seriald deployment on a jump host.
+# Verify a sercond deployment on a jump host.
 #
 # Run this from the machine you will actually use as a client. It copies the
 # Linux binary to the target, walks the whole chain, and prints a pass/fail
 # summary. It is also the thing to run when something stops working: every step
 # is a smaller version of the one an operator would otherwise debug by hand.
 #
-#   sh hack/verify-deployment.sh user@host [path/to/seriald-linux-amd64]
+#   sh hack/verify-deployment.sh user@host [path/to/sercond-linux-amd64]
 #
 # The binary is placed in a temporary directory, not in PATH, and removed on
 # exit unless KEEP=1 is set.
@@ -14,8 +14,8 @@
 set -u
 
 TARGET="${1:-}"
-BIN="${2:-dist/seriald-linux-amd64}"
-REMOTE_DIR="${REMOTE_DIR:-/tmp/seriald-verify}"
+BIN="${2:-dist/sercond-linux-amd64}"
+REMOTE_DIR="${REMOTE_DIR:-/tmp/sercond-verify}"
 KEEP="${KEEP:-0}"
 
 if [ -z "$TARGET" ]; then
@@ -48,7 +48,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-printf 'verifying seriald on %s\n' "$TARGET"
+printf 'verifying sercond on %s\n' "$TARGET"
 printf 'binary: %s (%s)\n' "$BIN" "$(wc -c <"$BIN" | tr -d ' ') bytes"
 
 step "1. transport"
@@ -73,19 +73,19 @@ else
 	exit 1
 fi
 
-if scp -q -o BatchMode=yes -o ConnectTimeout=8 "$BIN" "$TARGET:$REMOTE_DIR/seriald" 2>&1; then
+if scp -q -o BatchMode=yes -o ConnectTimeout=8 "$BIN" "$TARGET:$REMOTE_DIR/sercond" 2>&1; then
 	ok "copied binary"
 else
 	bad "scp failed"
 	exit 1
 fi
 
-if ssh_run "chmod +x $REMOTE_DIR/seriald" 2>&1; then
+if ssh_run "chmod +x $REMOTE_DIR/sercond" 2>&1; then
 	ok "marked executable"
 fi
 
 step "3. binary runs on the target"
-out=$(ssh_run 'seriald version')
+out=$(ssh_run 'sercond version')
 case "$out" in
 *protocol*) ok "$out" ;;
 *)
@@ -96,7 +96,7 @@ case "$out" in
 esac
 
 step "4. port enumeration"
-out=$(ssh_run 'seriald list --json')
+out=$(ssh_run 'sercond list --json')
 if echo "$out" | grep -q '^\['; then
 	n=$(echo "$out" | grep -c '"ref"')
 	ok "enumerated $n port(s)"
@@ -110,10 +110,10 @@ step "5. daemon outlives the ssh session"
 # and then pipes stdio; with stdin closed it exits immediately, so if the daemon
 # is still running afterwards it genuinely detached rather than being carried by
 # the session that started it.
-ssh_run 'seriald session < /dev/null' >/dev/null 2>&1
+ssh_run 'sercond session < /dev/null' >/dev/null 2>&1
 
 sleep 2
-out=$(ssh "$TARGET" "PATH=$REMOTE_DIR:\$PATH; export PATH; seriald status" 2>&1)
+out=$(ssh "$TARGET" "PATH=$REMOTE_DIR:\$PATH; export PATH; sercond status" 2>&1)
 case "$out" in
 *"not running"*)
 	bad "daemon did not survive"
@@ -132,7 +132,7 @@ esac
 step "6. transient socket path"
 # The socket lives in a per-user runtime directory. If the target is a shared
 # machine, two users must not collide.
-out=$(ssh_run 'ls -l "$XDG_RUNTIME_DIR/seriald/run/" 2>/dev/null || ls -l ~/.cache/seriald/run/ 2>/dev/null')
+out=$(ssh_run 'ls -l "$XDG_RUNTIME_DIR/sercon/run/" 2>/dev/null || ls -l ~/.cache/sercon/run/ 2>/dev/null')
 if echo "$out" | grep -q 's\.sock'; then
 	ok "socket present"
 	note "$out"
@@ -141,7 +141,7 @@ else
 fi
 
 step "7. logs are being written"
-out=$(ssh_run 'find ~/.local/state/seriald/ports -name "*.log" 2>/dev/null | head -5')
+out=$(ssh_run 'find ~/.local/state/sercon/ports -name "*.log" 2>/dev/null | head -5')
 if [ -n "$out" ]; then
 	ok "log files exist"
 	echo "$out" | sed 's/^ */        /'
@@ -154,7 +154,7 @@ else
 fi
 
 step "8. audit trail"
-out=$(ssh_run 'tail -5 ~/.local/state/seriald/audit/*.jsonl 2>/dev/null')
+out=$(ssh_run 'tail -5 ~/.local/state/sercon/audit/*.jsonl 2>/dev/null')
 if [ -n "$out" ]; then
 	ok "audit records present"
 	echo "$out" | sed 's/^ */        /'
@@ -163,7 +163,7 @@ else
 fi
 
 step "9. shutdown"
-out=$(ssh_run 'seriald stop')
+out=$(ssh_run 'sercond stop')
 case "$out" in
 *stopped*) ok "$out" ;;
 *) bad "stop did not confirm: $out" ;;

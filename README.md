@@ -1,4 +1,4 @@
-# seriald / sctl
+# sercon
 
 跨网段串口控制台工具。串口物理上挂在跳板机，你从自己的机器上通过 SSH 访问它。
 
@@ -21,7 +21,7 @@
 ```
 你的开发机                      跳板机                        目标机
 ┌──────────────┐  SSH stdio  ┌──────────────┐   USB 串口  ┌──────────┐
-│ sctl         │────────────▶│ seriald      │───────────▶│ 串口控制台│
+│ sercon         │────────────▶│ sercond      │───────────▶│ 串口控制台│
 │  · 原始终端   │  TCP+token  │  · 会话 Hub  │            │          │
 │  · 断线重连   │             │  · 端口日志   │            │          │
 │  · 本地日志   │             │  · 审计流水   │            │          │
@@ -30,11 +30,11 @@
 
 一个 Go 二进制三个角色，按 argv 区分：
 
-- `seriald capture` — 真正持有串口 fd 的守护进程
-- `seriald session` — SSH 拉起的哑管道，只搬运字节，不理解协议
-- `sctl` — 客户端，协议在它和守护进程之间端到端跑
+- `sercond capture` — 真正持有串口 fd 的守护进程
+- `sercond session` — SSH 拉起的哑管道，只搬运字节，不理解协议
+- `sercon` — 客户端，协议在它和守护进程之间端到端跑
 
-Windows 上还有第四个：`seriald-gui.exe`，同一个守护进程加上一个原生
+Windows 上还有第四个：`sercon-gui.exe`，同一个守护进程加上一个原生
 Win32 窗口（见下）。
 
 协议不泄漏到 SSH 那一层，所以守护进程的复杂度不会影响传输。
@@ -57,7 +57,7 @@ Win32 窗口（见下）。
 
 ## Windows：带窗口的守护进程
 
-`seriald-gui.exe` 做的是同一件事，但把状态显示出来。在一台有人坐着的实验室
+`sercon-gui.exe` 做的是同一件事，但把状态显示出来。在一台有人坐着的实验室
 机器上，一个不可见的后台进程是错的形状：看不出适配器是不是活着、找不到日志、
 也不知道怎么干净地停掉它。
 
@@ -65,14 +65,14 @@ Win32 窗口（见下）。
 最近错误），下面三个按钮：
 
 - **Open log folder** — 在资源管理器里打开日志目录
-- **Copy attach command** — 把 `sctl attach -t user@host PORT` 复制到剪贴板，
+- **Copy attach command** — 把 `sercon attach -t user@host PORT` 复制到剪贴板，
   选中的是哪一行就复制哪一行。这是这个窗口能给出的最有用的一样东西
 - **Refresh** — 立刻重扫一次，不用等 5 秒的自动扫描周期
 
 窗口开着就在抓日志，关掉就停。没有单独的开关，因为「窗口可见 = 在抓」比一个
 可能和实际状态不一致的复选框更不容易误判。
 
-客户端执行 `seriald stop` 也会真的关掉这个窗口，不会只回一个「shutting down」
+客户端执行 `sercond stop` 也会真的关掉这个窗口，不会只回一个「shutting down」
 然后继续跑。
 
 ### 界面
@@ -106,7 +106,7 @@ Win32 窗口（见下）。
 Windows 会给它分配一个控制台窗口——双击 GUI 就会在旁边冒出一个黑窗口。
 
 ```bash
-CGO_ENABLED=0 GOOS=windows go build -ldflags="-s -w -H=windowsgui" -o seriald-gui.exe ./cmd/seriald-gui
+CGO_ENABLED=0 GOOS=windows go build -ldflags="-s -w -H=windowsgui" -o sercon-gui.exe ./cmd/sercon-gui
 ```
 
 副作用是没有控制台之后 stderr 无处可去，所以诊断信息写到
@@ -128,7 +128,7 @@ shell:startup
 ——`WM_SIZE`、`WM_TIMER`、`WM_CLOSE`——都进了一个没人读的队列。窗口能显示，
 但里面永远不刷新，也关不掉。代码里的 `runtime.LockOSThread()` 就是为这个。
 
-`seriald-gui.exe.manifest` 要和 exe 放在同一目录，Windows 才会加载 comctl32 v6
+`sercon-gui.exe.manifest` 要和 exe 放在同一目录，Windows 才会加载 comctl32 v6
 并用上现代控件样式；缺了它程序照跑，只是控件退化成 XP 之前的画法。
 
 ### 改界面时怎么看效果
@@ -136,7 +136,7 @@ shell:startup
 `hack/screenshot-window.py` 把窗口内容抓成 PNG，用于迭代界面。
 
 ```bash
-./dist/seriald-gui.exe &
+./dist/sercon-gui.exe &
 python hack/screenshot-window.py dist/shot.png            # 出图
 python hack/screenshot-window.py dist/shot.png --histogram  # 附加颜色分布
 ```
@@ -166,14 +166,14 @@ python hack/screenshot-window.py dist/shot.png --histogram  # 附加颜色分布
 
 ```bash
 # Linux 跳板机
-scp dist/seriald-linux-amd64 lucas@jump:~/bin/seriald && ssh lucas@jump 'chmod +x ~/bin/seriald'
+scp dist/sercond-linux-amd64 lucas@jump:~/bin/sercond && ssh lucas@jump 'chmod +x ~/bin/sercond'
 
-# Windows 跳板机（装 OpenSSH Server 后，用于 sctl 远程接入）
-scp dist/seriald-windows-amd64.exe lucas@winjump:seriald.exe
+# Windows 跳板机（装 OpenSSH Server 后，用于 sercon 远程接入）
+scp dist/sercond-windows-amd64.exe lucas@winjump:sercond.exe
 
 # Windows 跳板机、想直接在机器上用：带窗口的版本
-#   seriald-gui.exe 和 seriald-gui.exe.manifest 放同一个目录，然后双击
-scp dist/seriald-gui.exe dist/seriald-gui.exe.manifest lucas@winjump:
+#   sercon-gui.exe 和 sercon-gui.exe.manifest 放同一个目录，然后双击
+scp dist/sercon-gui.exe dist/sercon-gui.exe.manifest lucas@winjump:
 ```
 
 **Linux 上还要把用户加进 `dialout` 组**，否则串口设备打不开：
@@ -182,22 +182,22 @@ scp dist/seriald-gui.exe dist/seriald-gui.exe.manifest lucas@winjump:
 sudo usermod -aG dialout lucas
 ```
 
-串口设备是 `crw-rw---- root:dialout`，不加组的话 `seriald` 起得来、端口也枚举得
+串口设备是 `crw-rw---- root:dialout`，不加组的话 `sercond` 起得来、端口也枚举得
 到，但每个端口都会停在 `offline`。组变更需要新会话才生效，所以改完要重新登录
 （或重新开一个 SSH 连接）。
 
-排查这类问题看 `seriald list --json` 里的 `last_err` 字段——端口打不开的原因会
+排查这类问题看 `sercond list --json` 里的 `last_err` 字段——端口打不开的原因会
 写在那里，表格输出里没有这一列。
 
-如果 `seriald` 装在 `~/bin` 而那个目录不在 PATH 上（常见），用 `--remote-bin`
+如果 `sercond` 装在 `~/bin` 而那个目录不在 PATH 上（常见），用 `--remote-bin`
 指过去即可，`~` 会被远程 shell 正确展开：
 
 ```bash
-sctl attach -t lucas@jump --remote-bin '~/bin/seriald' FT232R
+sercon attach -t lucas@jump --remote-bin '~/bin/sercond' FT232R
 ```
 
 **如果跳板机的 OpenSSH 比较老**（Ubuntu 22.04 的 8.9 就没有后量子密钥交换），
-每次连接会往 stderr 打三行 "store now, decrypt later" 警告，而 sctl 会把 stderr
+每次连接会往 stderr 打三行 "store now, decrypt later" 警告，而 sercon 会把 stderr
 转发到终端，于是每条命令都被污染。在 `~/.ssh/config` 里给这台机器加一行就好：
 
 ```
@@ -211,38 +211,38 @@ Windows 跳板机上**两个都要放**，它们分工不同：
 
 | 文件 | 角色 | 谁来启动 |
 |---|---|---|
-| `seriald-gui.exe` | 守护进程本体，带窗口，持有串口 | 你双击，或放进启动文件夹 |
-| `seriald-windows-amd64.exe` | `session` / `list` / `status` / `stop` | SSH 自动拉起 |
+| `sercon-gui.exe` | 守护进程本体，带窗口，持有串口 | 你双击，或放进启动文件夹 |
+| `sercond-windows-amd64.exe` | `session` / `list` / `status` / `stop` | SSH 自动拉起 |
 
-只放 GUI 的话 `sctl` 连不上，因为 SSH 需要的那几个子命令在 CLI 那个二进制里；
-只放 CLI 的话就没有窗口，得靠 `seriald capture` 手动起。
+只放 GUI 的话 `sercon` 连不上，因为 SSH 需要的那几个子命令在 CLI 那个二进制里；
+只放 CLI 的话就没有窗口，得靠 `sercond capture` 手动起。
 
-`seriald stop` 对两者都有效——GUI 收到请求会真的把窗口关掉。
+`sercond stop` 对两者都有效——GUI 收到请求会真的把窗口关掉。
 
 本机放客户端：
 
 ```bash
-install -m755 dist/sctl-linux-amd64 ~/.local/bin/sctl
+install -m755 dist/sercon-linux-amd64 ~/.local/bin/sercon
 ```
 
 ## 使用
 
 ```bash
 # 看有哪些口、谁占着
-sctl ls -t lucas@jump
+sercon ls -t lucas@jump
 
 # 连上去
-sctl attach -t lucas@jump usb-FT232R
+sercon attach -t lucas@jump usb-FT232R
 
 # 只读旁观同事的会话，不抢写权限
-sctl attach -t lucas@jump usb-FT232R --observe
+sercon attach -t lucas@jump usb-FT232R --observe
 
 # 顺手在本地也留一份
-sctl attach -t lucas@jump usb-FT232R --log bench01.log
+sercon attach -t lucas@jump usb-FT232R --log bench01.log
 
 # 守护进程状态 / 停掉它
-sctl status -t lucas@jump
-sctl stop   -t lucas@jump
+sercon status -t lucas@jump
+sercon stop   -t lucas@jump
 ```
 
 端口引用支持模糊匹配：`usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0` 可以直接写
@@ -267,7 +267,7 @@ sctl stop   -t lucas@jump
 用于「重启目标机并抓完整 boot log」这类活，比 shell 管道可靠：
 
 ```bash
-sctl run -t lucas@jump FT232R \
+sercon run -t lucas@jump FT232R \
   --script examples/reboot-capture.script \
   --out bench01-boot.log --timeout 90s
 ```
@@ -284,17 +284,17 @@ sleep 2s         暂停
 也可以不用脚本：
 
 ```bash
-sctl run -t jump FT232R --send '\r' --expect 'login:' --expect '#' --timeout 30s
+sercon run -t jump FT232R --send '\r' --expect 'login:' --expect '#' --timeout 30s
 ```
 
 ## 日志在哪
 
 | 内容 | 位置 |
 |---|---|
-| 串口输出 | Linux `~/.local/state/seriald/ports/<port>/YYYY-MM-DD.log`<br>Windows `%LOCALAPPDATA%\seriald\ports\<port>\YYYY-MM-DD.log` |
+| 串口输出 | Linux `~/.local/state/sercon/ports/<port>/YYYY-MM-DD.log`<br>Windows `%LOCALAPPDATA%\sercon\ports\<port>\YYYY-MM-DD.log` |
 | 审计流水 | 同级的 `audit/audit-YYYY-MM-DD.jsonl` |
 | 守护进程自身诊断 | `<runtime>/daemon.log` |
-| socket | Linux `$XDG_RUNTIME_DIR/seriald/run/s.sock`<br>Windows `%LOCALAPPDATA%\seriald\run\s.sock` |
+| socket | Linux `$XDG_RUNTIME_DIR/sercon/run/s.sock`<br>Windows `%LOCALAPPDATA%\sercon\run\s.sock` |
 
 端口日志行首带时间戳，跨天自动换文件，纯 append 不删旧文件——轮转交给 logrotate。
 日期文件开头有一行自描述头部，记录了当时的设备路径、端口引用和波特率。
@@ -302,7 +302,7 @@ sctl run -t jump FT232R --send '\r' --expect 'login:' --expect '#' --timeout 30s
 ### Windows 上目录名会带下划线，这不是 bug
 
 ```
-%LOCALAPPDATA%\seriald\ports\COM1_\2026-09-10.log
+%LOCALAPPDATA%\sercon\ports\COM1_\2026-09-10.log
                               ^^^ 注意这个下划线
 ```
 
@@ -319,7 +319,7 @@ specified"。而串口在 Windows 上几乎总是叫 COM1 到 COM9 之间的某�
 
 ## 配置
 
-`~/.config/seriald/config.json`（Windows 是 `%APPDATA%\seriald\config.json`），
+`~/.config/sercon/config.json`（Windows 是 `%APPDATA%\sercon\config.json`），
 全部可省略。参考 `examples/config.json`：
 
 ```json
@@ -334,7 +334,7 @@ specified"。而串口在 Windows 上几乎总是叫 COM1 到 COM9 之间的某�
 ```
 
 `desc` 只是给人看的标签；`baud` 可以为单个口覆盖全局值。
-用 `seriald list --json` 可以看到实际的 `ref`。
+用 `sercond list --json` 可以看到实际的 `ref`。
 
 ## 两个串口后端
 
@@ -370,7 +370,7 @@ Windows 侧值得一提的两点：
 go test ./...
 
 # 在真硬件上跑（会占用端口并拉高 DTR/RTS，所以要显式开启）
-SERIALD_TEST_HARDWARE=1 SERIALD_TEST_PORT=COM1 go test ./internal/serialport/ -v
+SERCON_TEST_HARDWARE=1 SERCON_TEST_PORT=COM1 go test ./internal/serialport/ -v
 ```
 
 硬件测试默认跳过。在 COM1 上接了重要东西的机器上，测试套件自作主张去抢串口
@@ -434,16 +434,16 @@ cmdline、能 reset 机器。最低限度：
 | 项目 | 怎么验的 | 结果 |
 |---|---|---|
 | SSH 传输承载协议 | 客户端在 A 机、守护进程在 B 机，真 ssh | 通 |
-| 守护进程脱离 SSH 会话 | `seriald session < /dev/null` 立刻退出后查 `status` | 守护进程还活着 |
+| 守护进程脱离 SSH 会话 | `sercond session < /dev/null` 立刻退出后查 `status` | 守护进程还活着 |
 | Linux termios + epoll 打开真实硬件 | 两个 FTDI 适配器都进 `online` | 通 |
 | by-id 枚举与解析 | `list` 列出两个 by-id 名字并解析到 ttyUSB0/1 | 通 |
-| 模糊匹配端口引用 | `sctl attach` 只写 `usb-FTDI_FT232R` 前缀 | 命中唯一端口 |
+| 模糊匹配端口引用 | `sercon attach` 只写 `usb-FTDI_FT232R` 前缀 | 命中唯一端口 |
 | **读路径（真实数据）** | BMC 的 `ncsi-ioctl` 内核消息持续落盘 | 通 |
 | **拔线检测 + 自动重连** | sysfs 解绑 USB 接口模拟拔线，再绑定 | `offline` → 7 秒后 `online` |
 | **日志连续性** | 上面的拔插前后检查同一个文件 | 一条没断，同一个文件 |
 | 交互式 attach | 真 TTY 上把 BMC 串口实时输出打到屏幕 | 通 |
 | 审计流水 | 会话/占用/释放/离线/上线全程记录 | 通 |
-| 优雅停止 | `seriald stop` | 通 |
+| 优雅停止 | `sercond stop` | 通 |
 | Windows 串口后端 | 本机 COM1 上 open/read/close 反复 | 通 |
 | Windows GUI | 窗口、着色、远端 stop 关窗 | 通 |
 
@@ -477,8 +477,8 @@ COM5 时，旧引用会标 offline 留在列表里，新号自动开新日志。
 make build
 
 # 只要本机的两个二进制
-go build -o seriald ./cmd/seriald
-go build -o sctl ./cmd/sctl
+go build -o sercond ./cmd/sercond
+go build -o sercon ./cmd/sercon
 
 # 手动注入版本（等价于 make build 做的事）
 MODULE=$(go list -m)
@@ -486,17 +486,17 @@ go build -ldflags "\
   -X $MODULE/internal/version.Version=$(git describe --tags --always --dirty) \
   -X $MODULE/internal/version.Commit=$(git rev-parse --short HEAD) \
   -X $MODULE/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  -o seriald ./cmd/seriald
+  -o sercond ./cmd/sercond
 ```
 
-`make build` 构建 5 个平台 × 2 个二进制，外加 `seriald-gui.exe`（Windows x64，并把
+`make build` 构建 5 个平台 × 2 个二进制，外加 `sercon-gui.exe`（Windows x64，并把
 manifest 一起复制到 `dist/`）。
 
 注入过版本的二进制会自报家门：
 
 ```
-$ ./seriald version
-seriald v0.1.0+db5b9b7 (protocol v1, go1.27.1, linux/amd64)
+$ ./sercond version
+sercond v0.1.0+db5b9b7 (protocol v1, go1.27.1, linux/amd64)
 ```
 
 裸 `go build` 出来的显示 `devel`——一眼就能看出它不是发布流程产出的东西。
@@ -522,9 +522,9 @@ Release 里会有：
 
 | 内容 | 来源 |
 |---|---|
-| `seriald-{linux,windows,darwin}-{amd64,arm64}` | 交叉编译，5 个平台 |
-| `sctl-*` 同上 | 交叉编译 |
-| `seriald-gui.exe` + `seriald-gui.exe.manifest` | Windows GUI |
+| `sercond-{linux,windows,darwin}-{amd64,arm64}` | 交叉编译，5 个平台 |
+| `sercon-*` 同上 | 交叉编译 |
+| `sercon-gui.exe` + `sercon-gui.exe.manifest` | Windows GUI |
 | `SHA256SUMS.txt` | `sha256sum` |
 | Source code (zip / tar.gz) | **GitHub 自动附带**，不需要额外步骤 |
 
@@ -538,9 +538,9 @@ Release 里会有：
 ## 代码结构
 
 ```
-cmd/seriald/          跳板机端：capture / session / list / status / stop
-cmd/seriald-gui/      Windows 带窗口的守护进程（Win32 绑定 + 窗口逻辑）
-cmd/sctl/             客户端：ls / attach / run / status / stop
+cmd/sercond/          跳板机端：capture / session / list / status / stop
+cmd/sercon-gui/      Windows 带窗口的守护进程（Win32 绑定 + 窗口逻辑）
+cmd/sercon/             客户端：ls / attach / run / status / stop
 internal/proto/       帧格式与控制消息
 internal/serialport/  串口后端（linux 已实现，windows 待补）
 internal/terminal/    客户端原始终端模式（linux / windows）

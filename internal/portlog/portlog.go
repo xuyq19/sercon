@@ -169,7 +169,7 @@ func (w *Writer) Note(format string, args ...any) error {
 		}
 	}
 	msg := fmt.Sprintf(format, args...)
-	w.buf = append(w.buf, fmt.Sprintf("[seriald %s] %s\n", time.Now().Format(stampLayout), msg)...)
+	w.buf = append(w.buf, fmt.Sprintf("[sercond %s] %s\n", time.Now().Format(stampLayout), msg)...)
 	w.atBOL = true
 	return w.flushLocked()
 }
@@ -225,7 +225,7 @@ func (w *Writer) ensureLocked() error {
 	// A brand-new file gets a header so an archived log is self-describing
 	// months later, when nobody remembers which adapter was on which machine.
 	if st, serr := f.Stat(); serr == nil && st.Size() == 0 {
-		hdr := fmt.Sprintf("=== seriald | %s | port=%s dev=%s baud=%d ===\n",
+		hdr := fmt.Sprintf("=== sercond | %s | port=%s dev=%s baud=%d ===\n",
 			time.Now().Format(time.RFC3339), w.port, w.dev, w.baud)
 		if _, werr := f.WriteString(hdr); werr != nil {
 			f.Close()

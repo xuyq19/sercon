@@ -49,9 +49,9 @@ jobs:
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          ./dist/seriald-linux-amd64 version
-          ./dist/sctl-linux-amd64 version
-          ./dist/seriald-linux-amd64 version | grep -q "$TAG" \
+          ./dist/sercond-linux-amd64 version
+          ./dist/sercon-linux-amd64 version
+          ./dist/sercond-linux-amd64 version | grep -q "$TAG" \
             || { echo "the binary does not report $TAG"; exit 1; }
 
       - name: checksums

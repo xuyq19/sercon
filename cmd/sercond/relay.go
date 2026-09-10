@@ -24,7 +24,7 @@ import (
 	"syscall"
 	"time"
 
-	"seriald/internal/relay"
+	"sercon/internal/relay"
 )
 
 // cmdRelay runs the rendezvous point both ends connect outbound to.
@@ -51,12 +51,12 @@ func cmdRelay(args []string) error {
 	srv := &relay.Server{
 		PairTimeout: *pairTimeout,
 		Logf: func(format string, a ...any) {
-			fmt.Fprintf(os.Stderr, "seriald: "+format+"\n", a...)
+			fmt.Fprintf(os.Stderr, "sercond: "+format+"\n", a...)
 		},
 	}
 
-	fmt.Fprintf(os.Stderr, "seriald: relay listening on %s\n", ln.Addr())
-	fmt.Fprintf(os.Stderr, "seriald: sessions are end-to-end encrypted; this process only forwards bytes\n")
+	fmt.Fprintf(os.Stderr, "sercond: relay listening on %s\n", ln.Addr())
+	fmt.Fprintf(os.Stderr, "sercond: sessions are end-to-end encrypted; this process only forwards bytes\n")
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
@@ -131,7 +131,7 @@ func cmdPublish(args []string) error {
 		Slots:    *slots,
 		Identity: ident,
 		Logf: func(format string, a ...any) {
-			fmt.Fprintf(os.Stderr, "seriald: "+format+"\n", a...)
+			fmt.Fprintf(os.Stderr, "sercond: "+format+"\n", a...)
 		},
 	}
 
@@ -144,7 +144,7 @@ func cmdPublish(args []string) error {
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sig
-		fmt.Fprintln(os.Stderr, "seriald: stopping publisher")
+		fmt.Fprintln(os.Stderr, "sercond: stopping publisher")
 		pub.Stop()
 	}()
 
@@ -155,7 +155,7 @@ func printTicket(t relay.Ticket, certPath, sock string) {
 	encoded := t.Encode()
 
 	fmt.Fprintf(os.Stderr, `
-seriald: publishing local console to a relay
+sercond: publishing local console to a relay
 
   relay        %s
   room         %s
@@ -169,8 +169,8 @@ ticket (hand this to the other side, it contains the token and the pin):
 
 then, from the machine that cannot reach this one:
 
-  sctl ls     --ticket '<ticket>'
-  sctl attach --ticket '<ticket>' <port>
+  sercon ls     --ticket '<ticket>'
+  sercon attach --ticket '<ticket>' <port>
 
 `, t.Relay, t.Room, sock, certPath, t.SHA256, encoded)
 }

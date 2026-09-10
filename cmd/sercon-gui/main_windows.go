@@ -1,8 +1,8 @@
 //go:build windows
 
-// Command seriald-gui is the Windows capture daemon with a window.
+// Command sercon-gui is the Windows capture daemon with a window.
 //
-// It does the same job as "seriald capture" — owns the serial devices, writes
+// It does the same job as "sercond capture" — owns the serial devices, writes
 // the per-port logs, serves the socket — but shows what it is doing. On a lab
 // machine that someone actually sits at, an invisible background process is the
 // wrong shape: there is no way to see whether an adapter is alive, no way to
@@ -26,20 +26,20 @@ import (
 	"time"
 	"unsafe"
 
-	"seriald/internal/audit"
-	"seriald/internal/config"
-	"seriald/internal/hub"
-	"seriald/internal/ipc"
-	"seriald/internal/proto"
-	"seriald/internal/version"
+	"sercon/internal/audit"
+	"sercon/internal/config"
+	"sercon/internal/hub"
+	"sercon/internal/ipc"
+	"sercon/internal/proto"
+	"sercon/internal/version"
 )
 
 const (
 	// The title stays fixed. Putting the port count in it would make the window
 	// jump around as adapters come and go, and it makes the window impossible
 	// to find by name from a script.
-	appTitle    = "seriald — serial console capture"
-	classNameID = "serialdGuiWindow"
+	appTitle    = "sercond — serial console capture"
+	classNameID = "sercondGuiWindow"
 
 	idList     = 1001
 	idOpenLogs = 1002
@@ -231,7 +231,7 @@ func runGUI() error {
 	pShowWindow.Call(hwnd, swShowNormal)
 	pUpdateWindow.Call(hwnd)
 
-	// A client running "seriald stop" must actually stop this window, not just
+	// A client running "sercond stop" must actually stop this window, not just
 	// get an acknowledgement. Without this the daemon keeps running and the
 	// caller times out wondering why.
 	go func() {
@@ -248,7 +248,7 @@ func runGUI() error {
 // becomeDaemon claims the socket and starts capturing.
 //
 // Binding is the single-instance gate. Losing the race is worth reporting
-// clearly: the likely cause is that a headless "seriald capture" is already
+// clearly: the likely cause is that a headless "sercond capture" is already
 // running, and the operator needs to know that rather than wonder why the
 // window shows nothing.
 func becomeDaemon() error {
@@ -269,7 +269,7 @@ func becomeDaemon() error {
 	ln, err := ipc.Listen(dir, sock)
 	if err != nil {
 		return fmt.Errorf("%w\n\nAnother capture daemon already owns this machine's socket.\n"+
-			"Stop it first ('seriald stop'), or close its window.", err)
+			"Stop it first ('sercond stop'), or close its window.", err)
 	}
 	if err := m.Start(); err != nil {
 		ln.Close()
@@ -673,7 +673,7 @@ func attachCommand() (string, bool) {
 
 	user := firstNonEmpty(os.Getenv("USERNAME"), os.Getenv("USER"))
 	host, _ := os.Hostname()
-	return fmt.Sprintf("sctl attach -t %s@%s %s", user, host, shellQuote(gui.rows[i])), true
+	return fmt.Sprintf("sercon attach -t %s@%s %s", user, host, shellQuote(gui.rows[i])), true
 }
 
 func confirmExit() bool {

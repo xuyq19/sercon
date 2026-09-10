@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"seriald/internal/proto"
-	"seriald/internal/terminal"
+	"sercon/internal/proto"
+	"sercon/internal/terminal"
 )
 
 const (
@@ -26,7 +26,7 @@ const (
 )
 
 // errReconnect asks the outer loop to retry immediately, with no backoff.
-var errReconnect = errors.New("sctl: reconnect requested")
+var errReconnect = errors.New("sercon: reconnect requested")
 
 func cmdAttach(args []string) error {
 	o := &options{}
@@ -41,7 +41,7 @@ func cmdAttach(args []string) error {
 	ref := fs.Arg(0)
 
 	if !terminal.IsTerminal(os.Stdin) {
-		return errors.New("attach needs an interactive terminal; use 'sctl run' for scripted sessions")
+		return errors.New("attach needs an interactive terminal; use 'sercon run' for scripted sessions")
 	}
 
 	log, err := openLocalLog(*logPath)
@@ -63,8 +63,8 @@ func cmdAttach(args []string) error {
 			return err
 		}
 
-		fmt.Fprintf(os.Stderr, "\r\nsctl: session ended: %v\r\n", err)
-		fmt.Fprintf(os.Stderr, "sctl: reconnecting in %s, Ctrl-C to stop\r\n", backoff)
+		fmt.Fprintf(os.Stderr, "\r\nsercon: session ended: %v\r\n", err)
+		fmt.Fprintf(os.Stderr, "sercon: reconnecting in %s, Ctrl-C to stop\r\n", backoff)
 
 		sig := make(chan os.Signal, 1)
 		stop := notifySignals(sig)
@@ -94,7 +94,7 @@ func attachOnce(o *options, ref string, log *localLog) error {
 	defer func() {
 		rm.Close()
 		if msg := rm.remoteError(); msg != "" {
-			fmt.Fprintf(os.Stderr, "\r\nsctl: jump host said: %s\r\n", msg)
+			fmt.Fprintf(os.Stderr, "\r\nsercon: jump host said: %s\r\n", msg)
 		}
 	}()
 
@@ -415,11 +415,11 @@ func (s *session) fail(err error) {
 // screen writes a server-side line to the terminal. Raw mode means every line
 // ending must be explicit CRLF.
 func (s *session) screen(format string, args ...any) {
-	fmt.Fprintf(os.Stdout, "\r\n[seriald] "+format+"\r\n", args...)
+	fmt.Fprintf(os.Stdout, "\r\n[sercond] "+format+"\r\n", args...)
 }
 
 func (s *session) help() {
-	fmt.Fprint(os.Stdout, "\r\n[seriald] Ctrl-A then:\r\n"+
+	fmt.Fprint(os.Stdout, "\r\n[sercond] Ctrl-A then:\r\n"+
 		"  x, q   detach and exit\r\n"+
 		"  a      send a literal Ctrl-A\r\n"+
 		"  l      toggle local logging\r\n"+
@@ -468,7 +468,7 @@ func (l *localLog) toggle() (on bool, path string, err error) {
 	defer l.mu.Unlock()
 
 	if l.f == nil {
-		name := "seriald-" + time.Now().Format("20060102-150405") + ".log"
+		name := "sercond-" + time.Now().Format("20060102-150405") + ".log"
 		f, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 		if err != nil {
 			return false, "", err

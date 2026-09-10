@@ -1,9 +1,9 @@
-// Command sctl is the operator's client. It runs on the machine the engineer is
+// Command sercon is the operator's client. It runs on the machine the engineer is
 // sitting at — Windows, WSL, or Linux — and reaches serial consoles through a
 // jump host that may be running any of those too.
 //
 // The client owns the protocol conversation end to end. The SSH channel only
-// carries it: sctl spawns ssh, speaks the framed protocol over its stdin and
+// carries it: sercon spawns ssh, speaks the framed protocol over its stdin and
 // stdout, and never depends on the jump host having a usable shell beyond
 // running one command.
 package main
@@ -25,24 +25,24 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"seriald/internal/proto"
-	"seriald/internal/version"
-	"seriald/internal/winconsole"
+	"sercon/internal/proto"
+	"sercon/internal/version"
+	"sercon/internal/winconsole"
 )
 
 const hint = `List the serial ports on a jump host:
 
-    sctl ls -t user@jump
+    sercon ls -t user@jump
 
 Then attach to one:
 
-    sctl attach -t user@jump PORT
+    sercon attach -t user@jump PORT
 
-For a Windows jump host with a GUI, start seriald-gui.exe there instead.`
+For a Windows jump host with a GUI, start sercon-gui.exe there instead.`
 
 func main() {
 	code := run()
-	winconsole.KeepOpen("sctl", hint)
+	winconsole.KeepOpen("sercon", hint)
 	os.Exit(code)
 }
 
@@ -51,7 +51,7 @@ func main() {
 func run() (code int) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Fprintf(os.Stderr, "sctl: internal error: %v\n", r)
+			fmt.Fprintf(os.Stderr, "sercon: internal error: %v\n", r)
 			code = 1
 		}
 	}()
@@ -74,13 +74,13 @@ func run() (code int) {
 	case "stop":
 		err = cmdStop(os.Args[2:])
 	case "version", "-v", "--version":
-		fmt.Println(version.Line("sctl", proto.Version))
+		fmt.Println(version.Line("sercon", proto.Version))
 		return 0
 	case "help", "-h", "--help":
 		usage()
 		return 0
 	default:
-		fmt.Fprintf(os.Stderr, "sctl: unknown command %q\n\n", os.Args[1])
+		fmt.Fprintf(os.Stderr, "sercon: unknown command %q\n\n", os.Args[1])
 		usage()
 		return 2
 	}
@@ -89,22 +89,22 @@ func run() (code int) {
 		if errors.Is(err, errUserQuit) {
 			return 0
 		}
-		fmt.Fprintln(os.Stderr, "sctl: "+err.Error())
+		fmt.Fprintln(os.Stderr, "sercon: "+err.Error())
 		return 1
 	}
 	return 0
 }
 
 func usage() {
-	fmt.Fprint(os.Stderr, `sctl - serial console client
+	fmt.Fprint(os.Stderr, `sercon - serial console client
 
 usage:
-  sctl ls      -t user@jump [--json]           list ports and who holds them
-  sctl attach  -t user@jump [PORT] [options]   interactive console
-  sctl run     -t user@jump  PORT [options]    scripted session, for automation
-  sctl status  -t user@jump                    report daemon state
-  sctl stop    -t user@jump                    shut the daemon down
-  sctl version
+  sercon ls      -t user@jump [--json]           list ports and who holds them
+  sercon attach  -t user@jump [PORT] [options]   interactive console
+  sercon run     -t user@jump  PORT [options]    scripted session, for automation
+  sercon status  -t user@jump                    report daemon state
+  sercon stop    -t user@jump                    shut the daemon down
+  sercon version
 
 attach options:
   --baud N          line rate for this attachment
@@ -124,7 +124,7 @@ connection options:
   -t, --target      SSH target, user@jump (also honours ~/.ssh/config)
   --ssh-port N      SSH port
   --ssh-opt K=V     extra ssh -o option (repeatable)
-  --remote-bin P    path to seriald on the jump host (default: seriald)
+  --remote-bin P    path to sercond on the jump host (default: sercond)
 `)
 }
 
@@ -157,7 +157,7 @@ func addCommonFlags(fs *flag.FlagSet, o *options) {
 	fs.StringVar(&o.sshPort, "ssh-port", "", "SSH port")
 	fs.StringVar(&o.sshBin, "ssh-bin", "ssh", "ssh client to run (use a full path to pick a specific install)")
 	fs.Var(&o.sshOpts, "ssh-opt", "extra ssh -o option, repeatable")
-	fs.StringVar(&o.remoteBin, "remote-bin", "seriald", "path to seriald on the jump host")
+	fs.StringVar(&o.remoteBin, "remote-bin", "sercond", "path to sercond on the jump host")
 	fs.StringVar(&o.remoteSock, "remote-socket", "", "override the daemon socket path")
 	fs.IntVar(&o.baud, "baud", 0, "line rate for this attachment")
 	fs.BoolVar(&o.observe, "observe", false, "attach read-only")
@@ -175,7 +175,7 @@ func (o *options) validate() error {
 //
 // Go's flag package stops at the first non-flag argument, so the natural
 //
-//	sctl attach -t host COM1 --baud 115200
+//	sercon attach -t host COM1 --baud 115200
 //
 // would leave --baud unparsed and silently ignored — the port would open at the
 // default rate with nothing to say otherwise. Silently is the unacceptable
@@ -281,7 +281,7 @@ func (o *options) remoteCommand(sub string, extra ...string) string {
 func shellQuote(s string) string {
 	// A leading ~ must stay outside the quotes. Tilde expansion happens before
 	// quote removal, so quoting it produces a filename that literally starts
-	// with a tilde — and "~/bin/seriald" is the most natural way to refer to a
+	// with a tilde — and "~/bin/sercond" is the most natural way to refer to a
 	// binary installed under a home directory.
 	if s == "~" {
 		return "~"
@@ -515,7 +515,7 @@ func renderPorts(ports []proto.PortInfo) error {
 	if err := w.Flush(); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "\nattach with: sctl attach -t %s\n", "<user@jump>")
+	fmt.Fprintf(os.Stderr, "\nattach with: sercon attach -t %s\n", "<user@jump>")
 	return nil
 }
 
@@ -544,7 +544,7 @@ func (b *syncBuffer) String() string {
 	return b.buf.String()
 }
 
-var errUserQuit = errors.New("sctl: user quit")
+var errUserQuit = errors.New("sercon: user quit")
 
 // notifySignals reports Ctrl-C and SIGTERM while the terminal is not in raw
 // mode, which is the only time they can be delivered.

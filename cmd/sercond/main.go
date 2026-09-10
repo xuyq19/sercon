@@ -1,4 +1,4 @@
-// Command seriald runs on the jump host, the machine the serial adapters are
+// Command sercond runs on the jump host, the machine the serial adapters are
 // physically plugged into.
 //
 // It has three faces. "capture" is the daemon that owns the devices.
@@ -21,31 +21,31 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"seriald/internal/audit"
-	"seriald/internal/config"
-	"seriald/internal/daemon"
-	"seriald/internal/hub"
-	"seriald/internal/ipc"
-	"seriald/internal/proto"
-	"seriald/internal/serialport"
-	"seriald/internal/version"
-	"seriald/internal/winconsole"
+	"sercon/internal/audit"
+	"sercon/internal/config"
+	"sercon/internal/daemon"
+	"sercon/internal/hub"
+	"sercon/internal/ipc"
+	"sercon/internal/proto"
+	"sercon/internal/serialport"
+	"sercon/internal/version"
+	"sercon/internal/winconsole"
 )
 
 // hint is shown when someone double-clicks the binary, where the console would
 // otherwise close before the usage text could be read.
 const hint = `On the jump host, start the daemon with:
 
-    seriald capture
+    sercond capture
 
-From your own machine, use the sctl client:
+From your own machine, use the sercon client:
 
-    sctl ls -t user@jump
-    sctl attach -t user@jump PORT`
+    sercon ls -t user@jump
+    sercon attach -t user@jump PORT`
 
 func main() {
 	code := run()
-	winconsole.KeepOpen("seriald", hint)
+	winconsole.KeepOpen("sercond", hint)
 	os.Exit(code)
 }
 
@@ -54,7 +54,7 @@ func main() {
 func run() (code int) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Fprintf(os.Stderr, "seriald: internal error: %v\n", r)
+			fmt.Fprintf(os.Stderr, "sercond: internal error: %v\n", r)
 			code = 1
 		}
 	}()
@@ -77,35 +77,35 @@ func run() (code int) {
 	case "stop":
 		err = cmdStop(os.Args[2:])
 	case "version", "-v", "--version":
-		fmt.Println(version.Line("seriald", proto.Version))
+		fmt.Println(version.Line("sercond", proto.Version))
 		return 0
 	case "help", "-h", "--help":
 		usage()
 		return 0
 	default:
-		fmt.Fprintf(os.Stderr, "seriald: unknown command %q\n\n", os.Args[1])
+		fmt.Fprintf(os.Stderr, "sercond: unknown command %q\n\n", os.Args[1])
 		usage()
 		return 2
 	}
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "seriald: "+err.Error())
+		fmt.Fprintln(os.Stderr, "sercond: "+err.Error())
 		return 1
 	}
 	return 0
 }
 
 func usage() {
-	fmt.Fprint(os.Stderr, `seriald - serial console daemon for a jump host
+	fmt.Fprint(os.Stderr, `sercond - serial console daemon for a jump host
 
 usage:
-  seriald capture [--socket PATH]      run the daemon (usually started for you)
-  seriald session [--socket PATH]      ensure the daemon exists, then pipe stdio to it
-  seriald session --direct             serve this connection without any daemon
-  seriald list [--json]                list ports and who holds them
-  seriald status                       report whether the daemon is running
-  seriald stop                          ask the daemon to shut down
-  seriald version
+  sercond capture [--socket PATH]      run the daemon (usually started for you)
+  sercond session [--socket PATH]      ensure the daemon exists, then pipe stdio to it
+  sercond session --direct             serve this connection without any daemon
+  sercond list [--json]                list ports and who holds them
+  sercond status                       report whether the daemon is running
+  sercond stop                          ask the daemon to shut down
+  sercond version
 
 config: `+configPath()+`
 `)
@@ -126,7 +126,7 @@ func cmdSession(args []string) error {
 	fs := flag.NewFlagSet("session", flag.ExitOnError)
 	direct := fs.Bool("direct", false, "serve this connection in-process, without a daemon")
 	socket := fs.String("socket", "", "daemon socket path (default: per-user runtime dir)")
-	exe := fs.String("exe", "", "seriald binary used to start the daemon")
+	exe := fs.String("exe", "", "sercond binary used to start the daemon")
 	_ = fs.Parse(args)
 
 	if *direct {
@@ -247,7 +247,7 @@ func cmdCapture(args []string) error {
 		Event:  audit.EventDaemonStart,
 		Detail: fmt.Sprintf("pid=%d socket=%s", os.Getpid(), sock),
 	})
-	fmt.Fprintf(os.Stderr, "seriald: capture daemon pid=%d socket=%s\n", os.Getpid(), sock)
+	fmt.Fprintf(os.Stderr, "sercond: capture daemon pid=%d socket=%s\n", os.Getpid(), sock)
 
 	stop := make(chan struct{})
 	go func() {
@@ -255,9 +255,9 @@ func cmdCapture(args []string) error {
 		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 		select {
 		case s := <-sig:
-			fmt.Fprintf(os.Stderr, "seriald: signal %v, shutting down\n", s)
+			fmt.Fprintf(os.Stderr, "sercond: signal %v, shutting down\n", s)
 		case <-m.ShutdownRequested():
-			fmt.Fprintln(os.Stderr, "seriald: shutdown requested by client")
+			fmt.Fprintln(os.Stderr, "sercond: shutdown requested by client")
 		case <-stop:
 			return
 		}
@@ -308,7 +308,7 @@ func cmdList(args []string) error {
 	devs, derr := serialport.Discover(nil)
 	if derr != nil {
 		// Say why the list is empty, but an empty list is still a valid answer.
-		fmt.Fprintf(os.Stderr, "seriald: device scan failed: %v\n", derr)
+		fmt.Fprintf(os.Stderr, "sercond: device scan failed: %v\n", derr)
 		return printPorts(nil, *asJSON)
 	}
 	baud := 115200

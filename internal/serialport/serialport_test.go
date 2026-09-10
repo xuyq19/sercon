@@ -78,13 +78,13 @@ func TestDiscoverDoesNotError(t *testing.T) {
 // control lines. On a machine with something important wired to COM1, a test
 // suite that grabs ports on its own would be a nasty surprise.
 //
-//	SERIALD_TEST_HARDWARE=1 go test ./internal/serialport/ -run Hardware -v
+//	SERCON_TEST_HARDWARE=1 go test ./internal/serialport/ -run Hardware -v
 func TestOpenHardware(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping hardware test in short mode")
 	}
-	if v := strings.TrimSpace(os.Getenv("SERIALD_TEST_HARDWARE")); v != "1" {
-		t.Skip("set SERIALD_TEST_HARDWARE=1 to open a real port")
+	if v := strings.TrimSpace(os.Getenv("SERCON_TEST_HARDWARE")); v != "1" {
+		t.Skip("set SERCON_TEST_HARDWARE=1 to open a real port")
 	}
 
 	devs, err := Discover(nil)
@@ -98,7 +98,7 @@ func TestOpenHardware(t *testing.T) {
 	// Prefer a named port so the choice is reproducible and visible in the
 	// output rather than whatever happens to be first.
 	dev := devs[0]
-	if want := strings.TrimSpace(os.Getenv("SERIALD_TEST_PORT")); want != "" {
+	if want := strings.TrimSpace(os.Getenv("SERCON_TEST_PORT")); want != "" {
 		found := false
 		for _, d := range devs {
 			if strings.EqualFold(d.Ref, want) {
@@ -107,7 +107,7 @@ func TestOpenHardware(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Fatalf("SERIALD_TEST_PORT=%s not among the discovered ports", want)
+			t.Fatalf("SERCON_TEST_PORT=%s not among the discovered ports", want)
 		}
 	}
 
@@ -164,8 +164,8 @@ func TestOpenHardware(t *testing.T) {
 // every time the target comes back, and a handle left behind would turn that
 // into a permanent failure.
 func TestReopenAfterClose(t *testing.T) {
-	if v := strings.TrimSpace(os.Getenv("SERIALD_TEST_HARDWARE")); v != "1" {
-		t.Skip("set SERIALD_TEST_HARDWARE=1 to open a real port")
+	if v := strings.TrimSpace(os.Getenv("SERCON_TEST_HARDWARE")); v != "1" {
+		t.Skip("set SERCON_TEST_HARDWARE=1 to open a real port")
 	}
 
 	devs, err := Discover(nil)

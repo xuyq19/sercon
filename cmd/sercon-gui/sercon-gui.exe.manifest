@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity type="win32" name="seriald.gui" version="1.0.0.0" processorArchitecture="*"/>
+  <assemblyIdentity type="win32" name="sercond.gui" version="1.0.0.0" processorArchitecture="*"/>
 
   <!-- Without this dependency Windows loads comctl32 v5 and every control is
        drawn in the pre-XP style. Windows looks for this file next to the

@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"seriald/internal/ipc"
+	"sercon/internal/ipc"
 )
 
 // Wait bounds how long Ensure polls for the socket after starting a daemon.

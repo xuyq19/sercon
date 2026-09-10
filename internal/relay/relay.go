@@ -4,7 +4,7 @@
 // # Status
 //
 // Implemented but NOT wired up, and not verified against a real NAT. The CLI
-// entry points exist in cmd/seriald/relay.go but are deliberately left out of
+// entry points exist in cmd/sercond/relay.go but are deliberately left out of
 // the command switch, so nothing here is reachable by an operator yet. The
 // package still compiles under `go vet ./...` so it will not silently rot.
 //
@@ -274,7 +274,7 @@ func generateIdentity() (tls.Certificate, error) {
 
 	tmpl := x509.Certificate{
 		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: "seriald-relay-publisher"},
+		Subject:      pkix.Name{CommonName: "sercond-relay-publisher"},
 		// Backdated slightly so a clock a few seconds out does not reject it.
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().AddDate(10, 0, 0),

@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"seriald/internal/audit"
-	"seriald/internal/proto"
+	"sercon/internal/audit"
+	"sercon/internal/proto"
 )
 
 const (

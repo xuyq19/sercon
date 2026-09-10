@@ -30,13 +30,13 @@ const SocketName = "s.sock"
 // already per-user and needs no uid call (os.Getuid does not exist on Windows).
 func RuntimeDir() (string, error) {
 	if d := os.Getenv("XDG_RUNTIME_DIR"); d != "" {
-		return filepath.Join(d, "seriald", "run"), nil
+		return filepath.Join(d, "sercon", "run"), nil
 	}
 	c, err := os.UserCacheDir()
 	if err != nil {
 		return "", fmt.Errorf("ipc: locate runtime directory: %w", err)
 	}
-	return filepath.Join(c, "seriald", "run"), nil
+	return filepath.Join(c, "sercon", "run"), nil
 }
 
 // Endpoint returns the runtime directory and the socket path inside it.

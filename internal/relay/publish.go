@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Publisher exposes a local seriald socket through a relay.
+// Publisher exposes a local sercond socket through a relay.
 //
 // Both ends of a relay session connect outbound. That is the whole trick: a
 // machine behind NAT needs no port forwarding, no inbound firewall rule, and no
@@ -184,7 +184,7 @@ func (p *Publisher) serve() (paired bool, err error) {
 }
 
 // Attach connects to a console through a relay and returns a connection
-// carrying the seriald protocol.
+// carrying the sercond protocol.
 //
 // The returned connection is end-to-end encrypted: the relay forwards bytes it
 // cannot read, and the certificate is pinned to the fingerprint in the ticket.

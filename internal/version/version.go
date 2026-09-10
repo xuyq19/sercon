@@ -8,9 +8,9 @@
 // The values are stamped at link time, never edited by hand:
 //
 //	go build -ldflags "\
-//	  -X seriald/internal/version.Version=$(git describe --tags --always) \
-//	  -X seriald/internal/version.Commit=$(git rev-parse --short HEAD) \
-//	  -X seriald/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+//	  -X sercon/internal/version.Version=$(git describe --tags --always) \
+//	  -X sercon/internal/version.Commit=$(git rev-parse --short HEAD) \
+//	  -X sercon/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 //
 // `make build` and .github/workflows/release.yml both do this, so a binary
 // always knows which commit it came from — which is the question that actually

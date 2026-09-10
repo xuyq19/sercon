@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"seriald/internal/proto"
+	"sercon/internal/proto"
 )
 
 // errNoMatch means a wait ran out of time without seeing its pattern.
@@ -97,9 +97,9 @@ func cmdRun(args []string) error {
 	if !info.Writable {
 		role = "read-only"
 	}
-	fmt.Fprintf(os.Stderr, "seriald: attached to %s @ %d baud (%s)\n", info.Port, info.Baud, role)
+	fmt.Fprintf(os.Stderr, "sercond: attached to %s @ %d baud (%s)\n", info.Port, info.Baud, role)
 	if info.Log != "" {
-		fmt.Fprintf(os.Stderr, "seriald: console log %s\n", info.Log)
+		fmt.Fprintf(os.Stderr, "sercond: console log %s\n", info.Log)
 	}
 
 	for _, st := range steps {
@@ -114,7 +114,7 @@ func cmdRun(args []string) error {
 			if err := rm.wr.Data([]byte(st.text)); err != nil {
 				return fmt.Errorf("%s: send: %w", st.origin, err)
 			}
-			fmt.Fprintf(os.Stderr, "seriald: sent %d bytes (%s)\n", len(st.text), st.origin)
+			fmt.Fprintf(os.Stderr, "sercond: sent %d bytes (%s)\n", len(st.text), st.origin)
 
 		case kindSleep:
 			time.Sleep(st.delay)
@@ -125,7 +125,7 @@ func cmdRun(args []string) error {
 			if werr != nil {
 				return fmt.Errorf("%s: %w", st.origin, werr)
 			}
-			fmt.Fprintf(os.Stderr, "seriald: %s matched after %s, %d bytes past the previous marker\n",
+			fmt.Fprintf(os.Stderr, "sercond: %s matched after %s, %d bytes past the previous marker\n",
 				st.origin, time.Since(start).Truncate(time.Millisecond), len(hit))
 		}
 	}
@@ -157,7 +157,7 @@ func (s *session) collect(col *collector) error {
 			case proto.OpError:
 				return errors.New(msg.Text)
 			case proto.OpNotice:
-				fmt.Fprintf(os.Stderr, "seriald: %s\n", msg.Text)
+				fmt.Fprintf(os.Stderr, "sercond: %s\n", msg.Text)
 			}
 		}
 	}

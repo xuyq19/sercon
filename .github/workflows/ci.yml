@@ -52,6 +52,6 @@ jobs:
 
       - name: the built binaries run
         run: |
-          ./dist/seriald-linux-amd64 version
-          ./dist/sctl-linux-amd64 version
-          ./dist/seriald-linux-amd64 list
+          ./dist/sercond-linux-amd64 version
+          ./dist/sercon-linux-amd64 version
+          ./dist/sercond-linux-amd64 list

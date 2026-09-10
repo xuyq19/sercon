@@ -1,6 +1,6 @@
 GO      ?= go
 BINDIR  := dist
-MODULE  := $(shell $(GO) list -m 2>/dev/null || echo seriald)
+MODULE  := $(shell $(GO) list -m 2>/dev/null || echo sercond)
 
 # Stamped into every binary at link time, never edited by hand.
 #
@@ -52,10 +52,10 @@ build:
 	  os=$${t%/*}; arch=$${t#*/}; \
 	  ext=""; [ "$$os" = "windows" ] && ext=".exe"; \
 	  CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GO) build -ldflags="$(LDFLAGS)" \
-	    -o $(BINDIR)/seriald-$$os-$$arch$$ext ./cmd/seriald || exit 1; \
+	    -o $(BINDIR)/sercond-$$os-$$arch$$ext ./cmd/sercond || exit 1; \
 	  CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GO) build -ldflags="$(LDFLAGS)" \
-	    -o $(BINDIR)/sctl-$$os-$$arch$$ext ./cmd/sctl || exit 1; \
-	  echo "built seriald + sctl for $$os/$$arch"; \
+	    -o $(BINDIR)/sercon-$$os-$$arch$$ext ./cmd/sercon || exit 1; \
+	  echo "built sercond + sercon for $$os/$$arch"; \
 	done
 	@$(MAKE) --no-print-directory gui
 
@@ -70,14 +70,14 @@ gui:
 	@mkdir -p $(BINDIR)
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build \
 	  -ldflags="$(LDFLAGS) -H=windowsgui" \
-	  -o $(BINDIR)/seriald-gui.exe ./cmd/seriald-gui
-	@cp cmd/seriald-gui/seriald-gui.exe.manifest $(BINDIR)/ 2>/dev/null || true
-	@echo "built seriald-gui.exe"
+	  -o $(BINDIR)/sercon-gui.exe ./cmd/sercon-gui
+	@cp cmd/sercon-gui/sercon-gui.exe.manifest $(BINDIR)/ 2>/dev/null || true
+	@echo "built sercon-gui.exe"
 
 list:
-	@echo "seriald          -> jump host daemon (linux, windows)"
-	@echo "seriald-gui.exe  -> jump host daemon with a window (windows)"
-	@echo "sctl             -> your machine (linux, windows, darwin)"
+	@echo "sercond          -> jump host daemon (linux, windows)"
+	@echo "sercon-gui.exe  -> jump host daemon with a window (windows)"
+	@echo "sercon             -> your machine (linux, windows, darwin)"
 
 clean:
 	rm -rf $(BINDIR)

@@ -1,6 +1,6 @@
 # Reboot a target over its serial console and capture the whole boot log.
 #
-#   sctl run -t lucas@jump usb-FT232R --script examples/reboot-capture.script \
+#   sercon run -t lucas@jump usb-FT232R --script examples/reboot-capture.script \
 #            --out bench01-boot.log --timeout 90s
 #
 # Escapes: \r \n \t \0 \\ \xHH

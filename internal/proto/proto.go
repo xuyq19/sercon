@@ -1,5 +1,5 @@
 // Package proto implements the framed wire protocol spoken between the local
-// sctl client and the seriald capture daemon running on the jump host.
+// sercon client and the sercond capture daemon running on the jump host.
 //
 // Frame layout:
 //

@@ -5,18 +5,18 @@ import "testing"
 func TestShellQuote(t *testing.T) {
 	cases := map[string]string{
 		// Ordinary references need no quoting at all.
-		"seriald":                                "seriald",
-		"/usr/local/bin/seriald":                 "/usr/local/bin/seriald",
+		"sercond":                                "sercond",
+		"/usr/local/bin/sercond":                 "/usr/local/bin/sercond",
 		"COM1":                                   "COM1",
 		"usb-FTDI_FT232R_USB_UART_A50285BI-if00": "usb-FTDI_FT232R_USB_UART_A50285BI-if00",
 
 		// The case this exists for: a leading tilde has to survive unquoted or
-		// the remote shell looks for a file named "~/bin/seriald".
-		"~/bin/seriald": "~/bin/seriald",
+		// the remote shell looks for a file named "~/bin/sercond".
+		"~/bin/sercond": "~/bin/sercond",
 
 		// When the part after ~/ needs quoting, only that part gets quoted.
 		// The tilde stays outside so expansion still happens.
-		"~/my dir/seriald": "~/'my dir/seriald'",
+		"~/my dir/sercond": "~/'my dir/sercond'",
 		"~/x*y":            "~/'x*y'",
 
 		// A tilde that is not a leading path component is just a character.
@@ -44,15 +44,15 @@ func TestShellQuote(t *testing.T) {
 // TestRemoteCommandShape pins down the exact string ssh receives, since that is
 // the part a remote shell will parse and the part no compiler checks.
 func TestRemoteCommandShape(t *testing.T) {
-	o := &options{remoteBin: "seriald"}
+	o := &options{remoteBin: "sercond"}
 
-	if got, want := o.remoteCommand("list", "--json"), "seriald list --json"; got != want {
+	if got, want := o.remoteCommand("list", "--json"), "sercond list --json"; got != want {
 		t.Errorf("remoteCommand = %q, want %q", got, want)
 	}
 
-	o = &options{remoteBin: "~/bin/seriald", remoteSock: "/run/user/1000/seriald/s.sock"}
+	o = &options{remoteBin: "~/bin/sercond", remoteSock: "/run/user/1000/sercon/s.sock"}
 	got := o.remoteCommand("session")
-	want := "~/bin/seriald session --socket /run/user/1000/seriald/s.sock"
+	want := "~/bin/sercond session --socket /run/user/1000/sercon/s.sock"
 	if got != want {
 		t.Errorf("remoteCommand = %q, want %q", got, want)
 	}

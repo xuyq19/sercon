@@ -1,6 +1,6 @@
 // Command fake-ssh stands in for the ssh client in integration tests.
 //
-// It accepts the same argument shape sctl builds, discards the connection
+// It accepts the same argument shape sercon builds, discards the connection
 // options and the destination, and runs the "remote" command on this machine
 // instead. That makes it possible to exercise the whole chain — client,
 // protocol, daemon, socket, serial driver — without a jump host in reach. The
@@ -8,10 +8,10 @@
 // code in it.
 //
 // Not shipped in dist/. Build it into a directory, put that directory first on
-// PATH, and sctl will pick it up:
+// PATH, and sercon will pick it up:
 //
 //	go build -o /tmp/fakebin/ssh.exe ./hack/fake-ssh
-//	PATH=/tmp/fakebin:$PATH sctl ls -t test@local
+//	PATH=/tmp/fakebin:$PATH sercon ls -t test@local
 package main
 
 import (
@@ -73,7 +73,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	// sctl passes the remote command as a single shell-quoted string, the same
+	// sercon passes the remote command as a single shell-quoted string, the same
 	// way a real ssh would hand it to the remote login shell. Splitting on
 	// whitespace is enough for the commands it builds, which never contain
 	// quoted arguments.

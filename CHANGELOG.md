@@ -14,10 +14,10 @@ built and hoped for.
 
 ### Added
 
-- **Daemon** (`seriald capture`) that owns the serial devices on a jump host,
+- **Daemon** (`sercond capture`) that owns the serial devices on a jump host,
   writes per-port logs whether or not anyone is attached, and serves a socket.
-- **Client** (`sctl`) with `ls`, `attach`, `run`, `status` and `stop`.
-- **Windows GUI daemon** (`seriald-gui.exe`): a native Win32 window over the
+- **Client** (`sercon`) with `ls`, `attach`, `run`, `status` and `stop`.
+- **Windows GUI daemon** (`sercon-gui.exe`): a native Win32 window over the
   same daemon, with the port table, a colour per state, and buttons for the log
   directory and for copying an attach command.
 - **Two serial backends**: Linux termios + epoll, and the Windows Win32
@@ -31,7 +31,7 @@ built and hoped for.
 - **Detachment without a service manager**: `setsid` on Linux and
   `CREATE_BREAKAWAY_FROM_JOB` on Windows, so the daemon outlives the SSH session
   that started it.
-- `sctl run` for scripted sessions (`send`, `sendln`, `wait`, `sleep`).
+- `sercon run` for scripted sessions (`send`, `sendln`, `wait`, `sleep`).
 
 ### Verified on real hardware
 

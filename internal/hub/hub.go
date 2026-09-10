@@ -15,11 +15,11 @@ import (
 	"sync"
 	"time"
 
-	"seriald/internal/audit"
-	"seriald/internal/config"
-	"seriald/internal/portlog"
-	"seriald/internal/proto"
-	"seriald/internal/serialport"
+	"sercon/internal/audit"
+	"sercon/internal/config"
+	"sercon/internal/portlog"
+	"sercon/internal/proto"
+	"sercon/internal/serialport"
 )
 
 // Options configures a Manager.
@@ -266,7 +266,7 @@ func (m *Manager) Ports() []proto.PortInfo {
 // Resolve maps an operator-typed reference to a port.
 //
 // Exact matches win. Otherwise a unique substring is accepted, which is what
-// makes "sctl attach FT232" work without pasting a 40-character by-id name.
+// makes "sercon attach FT232" work without pasting a 40-character by-id name.
 func (m *Manager) Resolve(ref string) (*Port, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

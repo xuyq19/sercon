@@ -18,19 +18,19 @@
 
 | 命令 | 运行位置 | 作用 |
 |---|---|---|
-| `sctl` | 本机 | 客户端，负责终端交互、重连、本地日志 |
-| `seriald session <ref>` | 跳板机（SSH 拉起） | 确保守护进程存在，然后把 stdin/stdout 与 Unix socket 对接 |
-| `seriald capture` | 跳板机（分离运行） | 真正持有串口 fd 的守护进程 |
+| `sercon` | 本机 | 客户端，负责终端交互、重连、本地日志 |
+| `sercond session <ref>` | 跳板机（SSH 拉起） | 确保守护进程存在，然后把 stdin/stdout 与 Unix socket 对接 |
+| `sercond capture` | 跳板机（分离运行） | 真正持有串口 fd 的守护进程 |
 
-关键点：`seriald session` 是个**哑管道**，不理解协议，只做双向字节搬运。
-协议在 `sctl` 和 `capture` 之间端到端跑，这样守护进程的复杂性不会泄漏到 SSH 这一层。
+关键点：`sercond session` 是个**哑管道**，不理解协议，只做双向字节搬运。
+协议在 `sercon` 和 `capture` 之间端到端跑，这样守护进程的复杂性不会泄漏到 SSH 这一层。
 
 ## 守护进程怎么在无 systemd 的情况下活下来
 
-1. 客户端执行 `ssh -T jump seriald session <ref>`
-2. `session` 先探 `<runtime>/seriald.sock`；连得上就直接用
-3. 连不上：取 `<runtime>/seriald.lock` 的 `flock`，拿到锁的进程负责
-   以 `setsid` + 重定向 stdio 的方式拉起 `seriald capture`
+1. 客户端执行 `ssh -T jump sercond session <ref>`
+2. `session` 先探 `<runtime>/sercond.sock`；连得上就直接用
+3. 连不上：取 `<runtime>/sercond.lock` 的 `flock`，拿到锁的进程负责
+   以 `setsid` + 重定向 stdio 的方式拉起 `sercond capture`
 4. `capture` 新会话 + 无控制终端，SSH 断开时收不到 SIGHUP，继续存活
 5. `session` 轮询 dial socket，成功后把自己变成哑管道
 
@@ -101,10 +101,10 @@
 ## 默认参数
 
 - 串口：115200 8N1，无流控，raw
-- runtime：`$XDG_RUNTIME_DIR/seriald`，未设置则 `/tmp/seriald-<uid>`
-- 日志：`$XDG_STATE_HOME/seriald/ports`，未设置则 `~/.local/state/seriald/ports`
+- runtime：`$XDG_RUNTIME_DIR/sercon`，未设置则 `/tmp/sercond-<uid>`
+- 日志：`$XDG_STATE_HOME/sercon/ports`，未设置则 `~/.local/state/sercon/ports`
 - 审计：同级的 `audit/`
-- 配置：`~/.config/seriald/config.json`
+- 配置：`~/.config/sercon/config.json`
 
 ## 分阶段实施
 
@@ -113,6 +113,6 @@
 | 1 | proto 帧 + serialport(termios/epoll) + terminal(raw 模式) | 编译通过 |
 | 2 | portlog 轮转日志 + audit JSONL | 编译通过 |
 | 3 | hub：端口注册/广播/端口锁/backlog | 编译通过 |
-| 4 | seriald（session/capture/list/status/stop）+ sctl（ls/attach/run） | 编译通过 |
+| 4 | sercond（session/capture/list/status/stop）+ sercon（ls/attach/run） | 编译通过 |
 | 5 | 交叉编译 linux+windows，端到端冒烟 | 跑通 |
 | 6 | Makefile + config 样例 + README | 可部署 |

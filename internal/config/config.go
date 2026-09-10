@@ -77,7 +77,7 @@ func Path() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("config: locate user config directory: %w", err)
 	}
-	return filepath.Join(d, "seriald", "config.json"), nil
+	return filepath.Join(d, "sercon", "config.json"), nil
 }
 
 // Load reads the configuration, applying defaults for anything absent.
@@ -167,14 +167,14 @@ func defaultDirs() (logDir, auditDir string) {
 		if base == "" {
 			base = filepath.Join(home, "AppData", "Local")
 		}
-		base = filepath.Join(base, "seriald")
+		base = filepath.Join(base, "sercon")
 		return filepath.Join(base, "ports"), filepath.Join(base, "audit")
 	default:
 		base := os.Getenv("XDG_STATE_HOME")
 		if base == "" {
 			base = filepath.Join(home, ".local", "state")
 		}
-		base = filepath.Join(base, "seriald")
+		base = filepath.Join(base, "sercon")
 		return filepath.Join(base, "ports"), filepath.Join(base, "audit")
 	}
 }
