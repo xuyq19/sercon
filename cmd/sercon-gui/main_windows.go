@@ -38,8 +38,8 @@ const (
 	// The title stays fixed. Putting the port count in it would make the window
 	// jump around as adapters come and go, and it makes the window impossible
 	// to find by name from a script.
-	appTitle    = "sercond — serial console capture"
-	classNameID = "sercondGuiWindow"
+	appTitle    = "sercon — serial console capture"
+	classNameID = "serconGuiWindow"
 
 	idList     = 1001
 	idOpenLogs = 1002
@@ -364,7 +364,7 @@ func onCreate(hwnd uintptr) {
 
 	// Two lines of hierarchy at the top. Without them the window reads as a
 	// bare table with buttons bolted underneath.
-	gui.header = createWindow(className("Static"), "Serial console capture · "+version.Full(),
+	gui.header = createWindow(className("Static"), "Serial console capture",
 		wsChild|wsVisible, 0, 12, 12, 100, 24, hwnd, 0)
 	setFont(gui.header, gui.fontHeading)
 
@@ -581,10 +581,10 @@ func refresh() {
 		observing += p.Observers
 	}
 
-	summary := fmt.Sprintf("%d ports · %d online · %d writable · %d observing",
-		len(ports), online, held, observing)
+	summary := fmt.Sprintf("%s · %d ports · %d online · %d writable · %d observing",
+		version.Full(), len(ports), online, held, observing)
 	if len(ports) == 0 {
-		summary = "capturing · no serial ports found"
+		summary = version.Full() + " · capturing · no serial ports found"
 	}
 	setText(gui.subtitle, summary)
 

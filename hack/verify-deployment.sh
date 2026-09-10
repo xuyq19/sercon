@@ -1,5 +1,5 @@
 #!/bin/sh
-# Verify a sercond deployment on a jump host.
+# Verify a sercon deployment on a jump host.
 #
 # Run this from the machine you will actually use as a client. It copies the
 # Linux binary to the target, walks the whole chain, and prints a pass/fail
@@ -48,7 +48,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-printf 'verifying sercond on %s\n' "$TARGET"
+printf 'verifying sercon on %s\n' "$TARGET"
 printf 'binary: %s (%s)\n' "$BIN" "$(wc -c <"$BIN" | tr -d ' ') bytes"
 
 step "1. transport"

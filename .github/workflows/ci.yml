@@ -13,12 +13,16 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      # cache is off on purpose: there are no third-party dependencies, so
+      # there is no go.sum for the cache step to key on, and it fails the
+      # restore every run.
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           check-latest: true
+          cache: false
 
       - name: gofmt
         run: |
