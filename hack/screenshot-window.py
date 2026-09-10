@@ -71,11 +71,15 @@ def write_png(path, width, height, rows):
 
 
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else "gui-shot.png"
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    out = args[0] if args else "gui-shot.png"
+    # The key panel is a second window of the same process, so the capture
+    # needs to be told which one to look at.
+    class_name = args[1] if len(args) > 1 else CLASS_NAME
 
-    hwnd = user32.FindWindowW(CLASS_NAME, None)
+    hwnd = user32.FindWindowW(class_name, None)
     if not hwnd:
-        sys.exit("window class %r not found" % CLASS_NAME)
+        sys.exit("window class %r not found" % class_name)
 
     rect = w.RECT()
     if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):

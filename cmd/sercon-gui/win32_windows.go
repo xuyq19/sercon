@@ -12,6 +12,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -33,31 +35,37 @@ var (
 )
 
 var (
-	pRegisterClassExW   = user32.NewProc("RegisterClassExW")
-	pCreateWindowExW    = user32.NewProc("CreateWindowExW")
-	pDefWindowProcW     = user32.NewProc("DefWindowProcW")
-	pGetMessageW        = user32.NewProc("GetMessageW")
-	pTranslateMessage   = user32.NewProc("TranslateMessage")
-	pDispatchMessageW   = user32.NewProc("DispatchMessageW")
-	pPostQuitMessage    = user32.NewProc("PostQuitMessage")
-	pPostMessageW       = user32.NewProc("PostMessageW")
-	pDestroyWindow      = user32.NewProc("DestroyWindow")
-	pShowWindow         = user32.NewProc("ShowWindow")
-	pUpdateWindow       = user32.NewProc("UpdateWindow")
-	pGetClientRect      = user32.NewProc("GetClientRect")
-	pSendMessageW       = user32.NewProc("SendMessageW")
-	pSetWindowTextW     = user32.NewProc("SetWindowTextW")
-	pLoadCursorW        = user32.NewProc("LoadCursorW")
-	pMessageBoxW        = user32.NewProc("MessageBoxW")
-	pSetProcessDPIAware = user32.NewProc("SetProcessDPIAware")
-	pMoveWindow         = user32.NewProc("MoveWindow")
-	pSetTimer           = user32.NewProc("SetTimer")
-	pOpenClipboard      = user32.NewProc("OpenClipboard")
-	pEmptyClipboard     = user32.NewProc("EmptyClipboard")
-	pSetClipboardData   = user32.NewProc("SetClipboardData")
-	pCloseClipboard     = user32.NewProc("CloseClipboard")
-	pGetDC              = user32.NewProc("GetDC")
-	pReleaseDC          = user32.NewProc("ReleaseDC")
+	pRegisterClassExW     = user32.NewProc("RegisterClassExW")
+	pCreateWindowExW      = user32.NewProc("CreateWindowExW")
+	pDefWindowProcW       = user32.NewProc("DefWindowProcW")
+	pGetMessageW          = user32.NewProc("GetMessageW")
+	pTranslateMessage     = user32.NewProc("TranslateMessage")
+	pDispatchMessageW     = user32.NewProc("DispatchMessageW")
+	pPostQuitMessage      = user32.NewProc("PostQuitMessage")
+	pPostMessageW         = user32.NewProc("PostMessageW")
+	pDestroyWindow        = user32.NewProc("DestroyWindow")
+	pShowWindow           = user32.NewProc("ShowWindow")
+	pUpdateWindow         = user32.NewProc("UpdateWindow")
+	pGetClientRect        = user32.NewProc("GetClientRect")
+	pSendMessageW         = user32.NewProc("SendMessageW")
+	pSetWindowTextW       = user32.NewProc("SetWindowTextW")
+	pLoadCursorW          = user32.NewProc("LoadCursorW")
+	pMessageBoxW          = user32.NewProc("MessageBoxW")
+	pSetProcessDPIAware   = user32.NewProc("SetProcessDPIAware")
+	pMoveWindow           = user32.NewProc("MoveWindow")
+	pSetTimer             = user32.NewProc("SetTimer")
+	pSetForegroundWindow  = user32.NewProc("SetForegroundWindow")
+	pOpenClipboard        = user32.NewProc("OpenClipboard")
+	pEmptyClipboard       = user32.NewProc("EmptyClipboard")
+	pSetClipboardData     = user32.NewProc("SetClipboardData")
+	pCloseClipboard       = user32.NewProc("CloseClipboard")
+	pGetDC                = user32.NewProc("GetDC")
+	pReleaseDC            = user32.NewProc("ReleaseDC")
+	pEnableWindow         = user32.NewProc("EnableWindow")
+	pGetWindowTextW       = user32.NewProc("GetWindowTextW")
+	pGetWindowTextLengthW = user32.NewProc("GetWindowTextLengthW")
+	pSetFocus             = user32.NewProc("SetFocus")
+	pGetDlgCtrlID         = user32.NewProc("GetDlgCtrlID")
 
 	pGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
 	pGlobalAlloc      = kernel32.NewProc("GlobalAlloc")
@@ -79,15 +87,38 @@ var (
 // Window styles and messages.
 const (
 	wsOverlappedWindow = 0x00CF0000
+	wsCaption          = 0x00C00000
 	wsChild            = 0x40000000
 	wsVisible          = 0x10000000
 	wsTabStop          = 0x00010000
 	wsGroup            = 0x00020000
 	wsExClientEdge     = 0x00000200
+	wsBorder           = 0x00800000
+	wsVScroll          = 0x00200000
+	wsDisabled         = 0x08000000
+
+	// Edit control styles. ES_MULTILINE is what makes the key box accept a
+	// paste of several lines at once, which is how these are usually copied.
+	esLeft        = 0x0000
+	esMultiline   = 0x0004
+	esAutoVScroll = 0x0040
+	esWantReturn  = 0x1000
+	esReadOnly    = 0x0800
+	esNoHideSel   = 0x0100
+
+	// ListBox styles.
+	lbsNotify           = 0x0001
+	lbsNoIntegralHeight = 0x0100
+
+	// Button styles.
+	bsPushButton    = 0x00000000
+	bsDefPushButton = 0x00000001
+	bsDisable       = 0x00000001
 
 	cwUseDefault = ^uint32(0) // (uint32)-1
 
 	swShowNormal = 1
+	swHide       = 0
 
 	csHRedraw = 0x0002
 	csVRedraw = 0x0001
@@ -176,12 +207,34 @@ const (
 	lvmSetRedraw = 0x100B
 )
 
+// ListBox.
+const (
+	lbAddString    = 0x0180
+	lbResetContent = 0x0184
+	lbGetCurSel    = 0x0188
+	lbSetCurSel    = 0x0186
+	lbGetCount     = 0x018B
+	lbGetTextLen   = 0x018A
+	lbGetText      = 0x0189
+	lbDelString    = 0x0182
+)
+
+// Edit control messages.
+const (
+	emSetSel       = 0x00B1
+	emReplaceSel   = 0x00C2
+	emSetReadOnly  = 0x00CF
+	emGetLineCount = 0x00BA
+	emSetLimitText = 0x00C5
+)
+
 // MessageBox.
 const (
 	mbOK              = 0x0000
 	mbYesNo           = 0x0004
 	mbIconError       = 0x0010
 	mbIconQuestion    = 0x0020
+	mbIconWarning     = 0x0030
 	mbIconInformation = 0x0040
 
 	idYes = 6
@@ -421,6 +474,93 @@ func setText(hwnd uintptr, s string) {
 
 func setFont(hwnd, font uintptr) {
 	pSendMessageW.Call(hwnd, wmSetFont, font, 1)
+}
+
+// windowText reads a control's text.
+func windowText(hwnd uintptr) string {
+	n, _, _ := pGetWindowTextLengthW.Call(hwnd)
+	if n == 0 {
+		return ""
+	}
+	buf := make([]uint16, n+1)
+	r, _, _ := pGetWindowTextW.Call(
+		hwnd,
+		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(len(buf)),
+	)
+	if r == 0 {
+		return ""
+	}
+	return syscall.UTF16ToString(buf[:r])
+}
+
+func enableWindow(hwnd uintptr, enable bool) {
+	var v uintptr
+	if enable {
+		v = 1
+	}
+	pEnableWindow.Call(hwnd, v)
+}
+
+func setFocus(hwnd uintptr) {
+	pSetFocus.Call(hwnd)
+}
+
+// sysLastError reads the calling thread's last error. It is only meaningful
+// immediately after a failed Win32 call, so it is wrapped rather than exposed
+// as a variable.
+func sysLastError() error {
+	return syscall.GetLastError()
+}
+
+// readFileString reads a file as text.
+func readFileString(path string) (string, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+// atomicWrite replaces a file's contents in one step.
+//
+// A key file is a login credential: if the process dies mid-write the machine
+// is left with a truncated file and no way in. Writing a sibling and renaming
+// over the original means a reader sees either the old file or the new one,
+// never a half-written one. The rename is atomic on the same volume, which is
+// why the temporary lives in the same directory.
+func atomicWrite(path, contents string) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+
+	f, err := os.CreateTemp(dir, ".authorized_keys-*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp) // no-op once the rename succeeds
+
+	if _, err := f.WriteString(contents); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+
+	// A Windows rename fails if the destination exists, unlike POSIX. Removing
+	// first loses atomicity, so this is only reached on the non-elevated path
+	// where the file is this user's own and the window is small.
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func messageBox(title, text string, flags uintptr) int {

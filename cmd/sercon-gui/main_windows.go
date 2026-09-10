@@ -40,11 +40,15 @@ const (
 	// to find by name from a script.
 	appTitle    = "sercon — serial console capture"
 	classNameID = "serconGuiWindow"
+	// keyClassName is the SSH key panel. It is a second top-level window
+	// rather than a dialog so that it shares this process's message loop.
+	keyClassName = "serconKeyWindow"
 
 	idList     = 1001
 	idOpenLogs = 1002
 	idCopyCmd  = 1003
 	idRefresh  = 1004
+	idKeys     = 1005
 
 	timerRefresh = 1
 	refreshEvery = 1000 // milliseconds
@@ -79,6 +83,9 @@ const (
 // wndProcCallback is package-level so the callback trampoline is never
 // collected while the window class still points at it.
 var wndProcCallback = syscall.NewCallback(wndProc)
+
+// keyPanelProcCallback is the same arrangement for the key panel's class.
+var keyPanelProcCallback = syscall.NewCallback(keyPanelProc)
 
 // init pins the main goroutine to its OS thread for the life of the process.
 //
@@ -399,8 +406,8 @@ func onCreate(hwnd uintptr) {
 		pSendMessageW.Call(gui.list, lvmInsertColumnW, uintptr(i), uintptr(unsafe.Pointer(&c)))
 	}
 
-	labels := []string{"Open log folder", "Copy attach command", "Refresh"}
-	ids := []uintptr{idOpenLogs, idCopyCmd, idRefresh}
+	labels := []string{"Open log folder", "Copy attach command", "SSH keys", "Refresh"}
+	ids := []uintptr{idOpenLogs, idCopyCmd, idKeys, idRefresh}
 	for i, label := range labels {
 		b := createWindow(className("Button"), label,
 			wsChild|wsVisible|wsTabStop|wsGroup,
@@ -655,6 +662,9 @@ func onCommand(id uint16) {
 			return
 		}
 		flash("copied: " + cmd)
+
+	case idKeys:
+		openKeyPanel()
 
 	case idRefresh:
 		refresh()
