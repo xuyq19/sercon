@@ -1,0 +1,23 @@
+# This repository is checked out on both Windows and Linux.
+#
+# core.autocrlf=true is set system-wide by Git for Windows on the development
+# machine, which would rewrite everything to CRLF on checkout. For Go source
+# that is merely untidy. For shell scripts it is fatal, and the failure is
+# misleading: a #! line ending in CR makes the kernel report
+# "bad interpreter: No such file or directory", which names the interpreter and
+# not the line ending, so the obvious suspect is the wrong one.
+#
+# So: normalise everything to LF. `eol=lf` is the part that matters — plain
+# `* text=auto` still honours core.autocrlf and hands CRLF back on checkout,
+# which puts the carriage return straight back into .gitignore and
+# .gitattributes themselves.
+* text=auto eol=lf
+*.go       text eol=lf
+*.sh       text eol=lf
+*.md       text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+Makefile   text eol=lf
+
+# Never touch binaries.
+*.exe      binary

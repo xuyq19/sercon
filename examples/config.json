@@ -1,0 +1,22 @@
+{
+  "baud": 115200,
+  "stamp_logs": true,
+  "allow_observe": true,
+  "max_observers": 4,
+  "auto_open": true,
+
+  "scan_globs": ["/dev/ttyUSB*", "/dev/ttyACM*"],
+
+  "ports": [
+    {
+      "ref": "usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0",
+      "desc": "WR5220-G5-bmc",
+      "baud": 115200
+    },
+    {
+      "ref": "COM3",
+      "desc": "lab-bench-01",
+      "baud": 115200
+    }
+  ]
+}

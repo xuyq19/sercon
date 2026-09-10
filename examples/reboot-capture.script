@@ -1,0 +1,22 @@
+# Reboot a target over its serial console and capture the whole boot log.
+#
+#   sctl run -t lucas@jump usb-FT232R --script examples/reboot-capture.script \
+#            --out bench01-boot.log --timeout 90s
+#
+# Escapes: \r \n \t \0 \\ \xHH
+
+# A bare CR is what most BMC and boot loader consoles want.
+send \r
+
+wait "login:"
+send root\r
+wait "#"
+
+# Reboot and wait for the kernel to come back on the console.
+sleep 1s
+send reboot\r
+wait "Restarting system"
+wait "login:"
+
+# Leave the target at a login prompt.
+send \r

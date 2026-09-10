@@ -1,0 +1,76 @@
+name: release
+
+# Tag-driven on purpose. A release is a decision about a specific commit, and
+# the tag is what every binary reports in --version, so tying the two together
+# removes the chance of shipping something that cannot say what it is.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: existing tag to build a release for
+        required: true
+
+permissions:
+  contents: write   # gh release create writes releases under this
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # git describe needs the tags, and the default shallow checkout has
+          # none — the stamping would silently fall back to a bare hash.
+          fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: check the tag looks like a version
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "tag '$TAG' is not of the form vX.Y.Z"; exit 1 ;;
+          esac
+
+      - name: build
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: make build VERSION="$TAG"
+
+      - name: the stamped version has to match the tag
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          ./dist/seriald-linux-amd64 version
+          ./dist/sctl-linux-amd64 version
+          ./dist/seriald-linux-amd64 version | grep -q "$TAG" \
+            || { echo "the binary does not report $TAG"; exit 1; }
+
+      - name: checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          # GitHub attaches "Source code (zip)" and "Source code (tar.gz)" to
+          # every release by itself, so the source goes out with no step here.
+          # Everything in dist/ — the cross-compiled binaries, the GUI manifest
+          # and the checksums — is uploaded alongside it.
+          gh release create "$TAG" \
+            --verify-tag \
+            --title "$TAG" \
+            --generate-notes \
+            dist/*

@@ -1,0 +1,9 @@
+# Build output. Roughly 40 MB of cross-compiled binaries, all reproducible
+# with `make build`, so none of it belongs in history.
+/dist/
+
+# Local build of the fake ssh shim used by the integration tests.
+/hack/bin/
+
+# Scratch files from the verification scripts.
+*.log
