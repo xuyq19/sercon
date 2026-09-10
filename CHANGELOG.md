@@ -37,8 +37,7 @@ releases use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.1.0] - 2026-09-10
 
-First working version. Verified end to end against real hardware rather than
-built and hoped for.
+First working version. Driven against real hardware on both platforms.
 
 ### Added
 

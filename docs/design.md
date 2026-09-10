@@ -1,6 +1,6 @@
 # 设计说明
 
-记录 sercon 为什么是现在这个样子。使用方式看 [`../README.md`](../README.md)。
+sercon 为什么是现在这个样子。使用方式看 [`../README.md`](../README.md)。
 
 ## 要解决的问题
 
@@ -13,7 +13,7 @@
 一个硬约束：跳板机不能装 systemd 服务，只能靠 SSH 会话拉起进程。常驻 TCP 服务
 那套做法直接排除掉了。
 
-## 形态
+## 进程形态
 
 单个 Go 二进制，按 argv 分三个角色：
 
@@ -128,8 +128,8 @@ Windows 侧两个地方值得单独说。
 上，不可见的后台进程不好用：看不出适配器活着没有、找不到日志、不知道怎么干净地
 停掉。
 
-窗口里是端口表，加三个按钮：打开日志目录、复制 attach 命令、立即重扫。复制按钮
-把 `sercon attach -t user@host PORT` 放进剪贴板，选中哪行复制哪行。
+窗口里是端口表和端口状态，底下一排按钮：打开日志目录、复制 attach 命令、SSH keys、
+立即重扫。复制按钮把 `sercon attach -t user@host PORT` 放进剪贴板，选中哪行复制哪行。
 
 窗口开着就在抓日志，关掉就停，没有单独的开关。`sercon stop` 会真的把窗口关掉。
 
@@ -187,7 +187,7 @@ python hack/screenshot-window.py dist/shot.png --histogram   # 附带颜色分�
 
 ## 踩过的坑
 
-每一条都花过时间，而且都不像是会出问题的地方。
+下面这些地方都失败过，而且失败时都没有明确的报错。
 
 **ListView 的 `CDDS_SUBITEM` 是 `0x00020000`**，不是 `0x00000002`（那是
 `CDDS_POSTPAINT`）。写错不报错，颜色就是不变。

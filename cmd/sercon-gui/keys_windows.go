@@ -360,7 +360,7 @@ func keyReloadWith(mayElevate bool) {
 			// with elevation, so the panel starts empty and says why.
 			keySetRows(kp, nil, "")
 			keySetStatus(kp.pathLabel, path)
-			keySetHint(kp, "Press «Reload» to read it (needs elevation). "+keyHintFor(path))
+			keySetHint(kp, `Press "Reload" to read it (needs elevation). `+keyHintFor(path))
 			return
 		}
 	}

@@ -1,14 +1,9 @@
 # sercon
 
-串口的物理位置在跳板机上，你在自己机器上，中间隔着网段。sercon 让你通过 SSH
-用它，像线插在自己机器上一样。
+串口设备插在跳板机上，跳板机在另一个网段。sercon 让本机的 `minicom` 等价物连到
+那根线：客户端跑在你的机器上，守护进程跑在跳板机上，两端用 SSH 传输。
 
 ![sercon-gui](docs/images/sercon-gui.png)
-
-守护进程脱离 SSH 会话独立存活，没人连接的时候照样抓日志。目标机半夜重启，第二天
-早上 boot log 还在。
-
-零依赖，纯标准库。一个静态二进制丢到跳板机就能跑，不需要 root、systemd 或配置文件。
 
 ## 安装
 
@@ -55,7 +50,7 @@ sercon attach -t you@jump --remote-bin '~/bin/sercond' FT232R
 | `sercon status -t HOST` | 守护进程状态 |
 | `sercon stop -t HOST` | 停掉守护进程 |
 
-四个命令都吃 `~/.ssh/config` 的别名，所以 `-t jump` 就够了，ProxyJump 交给 SSH。
+五个命令都吃 `~/.ssh/config` 的别名，所以 `-t jump` 就够了，ProxyJump 交给 SSH。
 
 `PORT` 可以只写能唯一识别的前缀，比如 `usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0`
 写 `FT232R` 就行。匹配到多个会报错并列出候选。
@@ -139,7 +134,7 @@ sercon: --expect #1: pattern not seen before the timeout: ZZZZ_NOMATCH
 
 ## 日志
 
-守护进程不看有没有人连着都写日志。
+日志由守护进程写，与有没有客户端连接无关。
 
 | 内容 | 位置 |
 |---|---|
@@ -195,18 +190,19 @@ sercon: --expect #1: pattern not seen before the timeout: ZZZZ_NOMATCH
 
 ## Windows
 
-跳板机上两个二进制都要，分工不同：
+Windows 跳板机上有两个二进制，分工不同：
 
 | 文件 | 角色 | 谁启动 |
 |---|---|---|
-| `sercon-gui.exe` | 守护进程本体，带窗口，持有串口 | 双击，或放启动文件夹 |
-| `sercond-windows-amd64.exe` | `session` / `list` / `status` / `stop` | SSH 拉起 |
+| `sercon-gui.exe` | 带窗口的守护进程，持有串口 | 双击，或放启动文件夹 |
+| `sercond.exe`（发布包里的 `sercond-windows-amd64.exe`） | `session` / `list` / `status` / `stop` | SSH 拉起 |
 
-只放 GUI 的话客户端连不上，SSH 需要的那几个子命令在 CLI 里。只放 CLI 的话没有
-窗口，得手动 `sercond capture`。`sercon-gui.exe.manifest` 和 exe 放同一目录。
+两个都要放。只有 GUI 的话 SSH 那侧没有可执行的子命令；只有 CLI 的话守护进程得靠
+`sercond capture` 以前台方式手动起。`sercon-gui.exe.manifest` 和 exe 放同一目录。
 
-窗口里有端口表和四个按钮：打开日志目录、复制 attach 命令、SSH keys、立即重扫。
-窗口开着就在抓日志，关掉就停。`sercon stop -t winjump` 会把窗口关掉。
+窗口里是端口表，底下一排按钮：打开日志目录、复制 attach 命令、SSH keys、立即重扫。
+窗口开着就在抓日志，关掉就停，没有单独的开关。`sercon stop -t winjump` 会把窗口
+关掉，不是只回一个确认。
 
 GUI 必须在交互桌面上启动。SSH 会话里启动的进程画不出窗口，看得见进程看不见界面。
 要么双击，要么放启动文件夹（`Win+R` → `shell:startup`）。
@@ -215,8 +211,8 @@ GUI 必须在交互桌面上启动。SSH 会话里启动的进程画不出窗口
 
 `SSH keys` 按钮装客户端公钥，省得手改 `authorized_keys`。
 
-Windows 上这件事有两个坑，都表现为同一句 `Permission denied (publickey)`：文件位置
-取决于账号是不是管理员，而管理员那个文件还必须收紧 ACL。面板两件都替你做了。
+Windows 上这件事有两个坑，出错都报同一句 `Permission denied (publickey)`：文件位置
+取决于账号是不是管理员，而管理员那个文件还必须收紧 ACL。面板两件都做了。
 
 管理员账号要写的是：
 
@@ -350,6 +346,7 @@ internal/audit/       JSONL 审计流水
 internal/daemon/      守护进程的分离启动
 internal/ipc/         socket 端点解析与单实例绑定
 internal/terminal/    客户端原始终端模式
+internal/winconsole/  Windows 控制台探测与双击保活
 internal/sshauth/      sshd 密钥文件定位、解析与写入
 internal/version/     版本号唯一来源
 internal/relay/       中继传输（已实现，未接入 CLI）
