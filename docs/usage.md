@@ -126,6 +126,45 @@ sercon attach -t jump FT232R --observe
 
 脚本里想要明确失败就用 `--no-reconnect`。
 
+**stdin 不是终端时永远不重连**，等于隐式加上了 `--no-reconnect`。理由见下面的
+管道一节。
+
+### 管道
+
+`attach` 不需要终端。stdin 不是 TTY 时它不进 raw 模式、不认 Ctrl-A、不往 stdout
+写任何装饰，就是纯粹的字节搬运。行为对齐本机设备：
+
+```bash
+# 像 cat /dev/ttyUSB1，Ctrl-C 结束
+sercon attach -t jump FT232R < /dev/null
+
+# 抓 50 行
+sercon attach -t jump FT232R < /dev/null | head -50
+
+# 等关键字，等到就退
+sercon attach -t jump FT232R < /dev/null | grep -m1 panic
+
+# 追加到文件
+sercon attach -t jump FT232R < /dev/null >> bench01.log
+```
+
+**stdin 关闭不等于读结束。** 管道里 stdin 到 EOF 只是说明没人再输入了，链路仍然
+在收数据——所以 `< /dev/null` 会一直读到链路断开或者你打断它，和
+`cat /dev/ttyUSB1 </dev/null` 一样。
+
+**往里写用 `run --send`**，不是 `attach`：
+
+```bash
+sercon run -t jump FT232R --send '\r' --quiet                     # 写完就退
+sercon run -t jump FT232R --send 'reboot\r' --expect 'login:' --timeout 60s
+```
+
+`attach` 之所以不适合写，是形态上分不出「写完就退」和「读到底」这两种意图——
+两者都是一根管道。需要哪个由用哪个子命令来表达。
+
+stdout 只承载 console 数据。「已连接端口 X」「日志在 Y」这类提示在非终端模式下
+走 stderr，所以重定向和管道都不会被污染。
+
 ### Ctrl-A
 
 | 按键 | 动作 |

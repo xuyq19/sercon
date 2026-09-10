@@ -40,19 +40,25 @@ func cmdAttach(args []string) error {
 	}
 	ref := fs.Arg(0)
 
-	if !terminal.IsTerminal(os.Stdin) {
-		return errors.New("attach needs an interactive terminal; use 'sercon run' for scripted sessions")
-	}
-
 	log, err := openLocalLog(*logPath)
 	if err != nil {
 		return err
 	}
 	defer log.Close()
 
+	// Reconnecting is an interactive convenience: the operator is sitting
+	// there and does not want to retype the command because a USB adapter got
+	// bumped. On a pipe it is wrong — the caller is a shell or a program, and
+	// the rule for a closed stream is to end, not to silently wait and resume.
+	// `grep` would otherwise hang forever on a target that went away.
+	interactive := terminal.IsTerminal(os.Stdin)
+	if !interactive {
+		o.noReconnect = true
+	}
+
 	backoff := time.Second
 	for {
-		err := attachOnce(o, ref, log)
+		err := attachOnce(o, ref, log, interactive)
 		switch {
 		case err == nil, errors.Is(err, errUserQuit):
 			return nil
@@ -60,6 +66,10 @@ func cmdAttach(args []string) error {
 			backoff = time.Second
 			continue
 		case o.noReconnect:
+			return err
+		}
+
+		if !interactive {
 			return err
 		}
 
@@ -86,7 +96,7 @@ func cmdAttach(args []string) error {
 }
 
 // attachOnce runs one connection attempt to completion.
-func attachOnce(o *options, ref string, log *localLog) error {
+func attachOnce(o *options, ref string, log *localLog, interactive bool) error {
 	rm, err := dialRemote(o, o.remoteCommand("session"))
 	if err != nil {
 		return err
@@ -98,7 +108,7 @@ func attachOnce(o *options, ref string, log *localLog) error {
 		}
 	}()
 
-	s := &session{o: o, remote: rm, log: log, closed: make(chan struct{})}
+	s := &session{o: o, remote: rm, log: log, closed: make(chan struct{}), tty: interactive}
 	s.lastRecv.Store(time.Now().UnixNano())
 
 	// The handshake happens before the terminal goes raw, so authentication
@@ -111,6 +121,15 @@ func attachOnce(o *options, ref string, log *localLog) error {
 	info, backlog, err := s.openPort(ref)
 	if err != nil {
 		return err
+	}
+
+	// A terminal gets raw mode and the escape key. A pipe gets neither: it is
+	// being driven by a shell or a program, so its bytes are already exactly
+	// what the caller meant to send. This makes the tool behave like the local
+	// device does — `sercon attach ... < /dev/null` reads like `cat /dev/ttyS0`
+	// and `echo -e '\r' | sercon attach ...` writes like a redirect into it.
+	if !s.tty {
+		return s.runPiped(info, backlog)
 	}
 
 	state, err := terminal.MakeRaw(os.Stdin)
@@ -128,6 +147,10 @@ type session struct {
 	o      *options
 	remote *remote
 	log    *localLog
+
+	// tty is true when stdin is a terminal, which is what selects the
+	// interactive behaviour: raw mode, the escape key, and the banner.
+	tty bool
 
 	closed chan struct{}
 	once   sync.Once
@@ -207,7 +230,72 @@ func (s *session) run(info *proto.Message, backlog []byte) error {
 	return err
 }
 
+// runPiped is the non-interactive path: no raw mode, no escape key, no banner
+// on stdout.
+//
+// The important difference from run is what stdin EOF means. Interactively,
+// a closed stdin is a reason to tear the session down, because there is no
+// longer anyone at the keyboard. Here it only means the caller has finished
+// writing — reading continues until the link drops or a signal arrives, which
+// is how the local device behaves:
+//
+//	cat /dev/ttyUSB1 </dev/null     keeps printing until you interrupt it
+//	echo -e '\r' >/dev/ttyUSB1      writes and exits immediately
+//
+// Without this, piping anything in would close the port before the reply came
+// back, and the tool would be useless from a shell.
+func (s *session) runPiped(info *proto.Message, backlog []byte) error {
+	s.banner(info)
+	if len(backlog) > 0 {
+		_, _ = os.Stdout.Write(backlog)
+		s.log.Write(backlog)
+	}
+
+	sig := make(chan os.Signal, 1)
+	stop := notifySignals(sig)
+	defer stop()
+
+	out := make(chan error, 3)
+	go func() { out <- s.pumpInput() }()
+	go func() { out <- s.pumpOutput() }()
+	go func() { out <- s.heartbeat() }()
+
+	var err error
+	select {
+	case err = <-out:
+	case <-sig:
+		// A signal is the normal way to end a pipeline, the same as
+		// interrupting cat. Not an error.
+		err = nil
+	case <-s.closed:
+	}
+
+	s.remote.Close()
+	drain(out, 2)
+
+	s.mu.Lock()
+	if s.failure != nil {
+		err = s.failure
+	}
+	s.mu.Unlock()
+	return err
+}
+
 func (s *session) banner(info *proto.Message) {
+	if !s.tty {
+		// Notes would land in the middle of the stream the caller is piping
+		// somewhere, so they go to stderr where they cannot corrupt it.
+		role := "writable"
+		if !info.Writable {
+			role = "read-only"
+		}
+		fmt.Fprintf(os.Stderr, "sercon: %s @ %d baud (%s)\n", info.Port, info.Baud, role)
+		if info.Log != "" {
+			fmt.Fprintf(os.Stderr, "sercon: console log %s\n", info.Log)
+		}
+		return
+	}
+
 	role := "writable"
 	if !info.Writable {
 		role = "read-only"
@@ -228,17 +316,41 @@ func (s *session) pumpInput() error {
 	for {
 		n, err := os.Stdin.Read(buf)
 		if n > 0 {
-			if herr := s.handleKeys(buf[:n]); herr != nil {
+			if !s.tty {
+				// No escape key on a pipe: every byte is meant literally, and
+				// a stray 0x01 is real data rather than a command prefix.
+				if werr := s.remote.wr.Data(buf[:n]); werr != nil {
+					return werr
+				}
+			} else if herr := s.handleKeys(buf[:n]); herr != nil {
 				return herr
 			}
 		}
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				return nil
+				return s.inputClosed()
 			}
 			return err
 		}
 	}
+}
+
+// inputClosed handles stdin reaching EOF.
+//
+// On a terminal that ends the session: the operator closed stdin, so there is
+// nobody left to type. On a pipe it must not: the caller redirected a file or
+// finished the left side of a pipeline, but the output it asked for is still
+// arriving. Returning here would close the port mid-reply and truncate it.
+//
+// So the input side simply stops participating and parks until the session
+// ends by other means. Reading continues; `sercon attach ... </dev/null`
+// behaves like `cat /dev/ttyUSB1 </dev/null`, which also keeps printing.
+func (s *session) inputClosed() error {
+	if s.tty {
+		return nil
+	}
+	<-s.closed
+	return nil
 }
 
 func (s *session) handleKeys(p []byte) error {
@@ -415,6 +527,13 @@ func (s *session) fail(err error) {
 // screen writes a server-side line to the terminal. Raw mode means every line
 // ending must be explicit CRLF.
 func (s *session) screen(format string, args ...any) {
+	// On a terminal these status notes scroll past in the same place the
+	// console output does. When stdout is a pipe it is carrying only the
+	// console, so notes have to go to stderr or they corrupt the stream.
+	if !s.tty {
+		fmt.Fprintf(os.Stderr, "sercon: "+format+"\n", args...)
+		return
+	}
 	fmt.Fprintf(os.Stdout, "\r\n[sercond] "+format+"\r\n", args...)
 }
 
