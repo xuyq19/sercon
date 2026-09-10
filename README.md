@@ -75,6 +75,37 @@ console 里敲字。
 `Ctrl-A` 是转义键，对齐 minicom：`Ctrl-A x` 退出，`Ctrl-A a` 发送字面量 Ctrl-A，
 `Ctrl-A l` 开关本地日志，`Ctrl-A r` 重连，`Ctrl-A b` 发 break，`Ctrl-A ?` 帮助。
 
+### 管道
+
+`attach` 不需要终端。stdin 不是 TTY 时不进 raw 模式、不认转义键、不往 stdout 写
+任何装饰，行为对齐本机设备：
+
+```bash
+# 抓一段，像 cat /dev/ttyUSB1，Ctrl-C 结束
+sercon attach -t jump FT232R < /dev/null | head -50
+
+# 等一个关键字
+sercon attach -t jump FT232R < /dev/null | grep -m1 panic
+
+# 落盘
+sercon attach -t jump FT232R < /dev/null >> bench01.log
+
+# 写，像 echo -e '\r' > /dev/ttyUSB1，写完就退
+sercon run -t jump FT232R --send '\r' --quiet
+
+# 写进去再等回复
+sercon run -t jump FT232R --send 'reboot\r' --expect 'Restarting system' --timeout 60s
+```
+
+两点和本地设备的差别：
+
+- **`attach` 读到链路断为止。** `cat /dev/ttyUSB1 </dev/null` 也是这个行为——stdin
+  关掉只说明没人再输入，不代表该停止读。管道模式下不自动重连，断了就结束
+- **往里写用 `run --send`。** 它配 `--expect` 还能等到回复再退，比裸写更实用
+
+stdout 只有 console 数据，端口名、日志路径这些提示走 stderr，所以重定向和管道都
+不会被污染。
+
 ### run
 
 重启目标机并抓完整 boot log：
@@ -174,11 +205,45 @@ sercon: --expect #1: pattern not seen before the timeout: ZZZZ_NOMATCH
 只放 GUI 的话客户端连不上，SSH 需要的那几个子命令在 CLI 里。只放 CLI 的话没有
 窗口，得手动 `sercond capture`。`sercon-gui.exe.manifest` 和 exe 放同一目录。
 
-窗口里有端口表和三个按钮：打开日志目录、复制 attach 命令、立即重扫。窗口开着就在
-抓日志，关掉就停。`sercon stop -t winjump` 会把窗口关掉。
+窗口里有端口表和四个按钮：打开日志目录、复制 attach 命令、SSH keys、立即重扫。
+窗口开着就在抓日志，关掉就停。`sercon stop -t winjump` 会把窗口关掉。
 
 GUI 必须在交互桌面上启动。SSH 会话里启动的进程画不出窗口，看得见进程看不见界面。
 要么双击，要么放启动文件夹（`Win+R` → `shell:startup`）。
+
+### SSH keys
+
+`SSH keys` 按钮装客户端公钥，省得手改 `authorized_keys`。
+
+Windows 上这件事有两个坑，都表现为同一句 `Permission denied (publickey)`：文件位置
+取决于账号是不是管理员，而管理员那个文件还必须收紧 ACL。面板两件都替你做了。
+
+管理员账号要写的是：
+
+```
+C:\ProgramData\ssh\administrators_authorized_keys
+```
+
+不是 `%USERPROFILE%\.ssh\authorized_keys`。默认的 `sshd_config` 末尾有这么一段：
+
+```
+Match Group administrators
+       AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys
+```
+
+所以往 `~/.ssh/authorized_keys` 里写，看起来很对，但 sshd 根本不读。面板会根据账号
+自动选对文件，并在顶部把路径显示出来。
+
+那个文件的 ACL 必须只有 `SYSTEM` 和 `Administrators`，sshd 才肯读——能改这个文件
+的人就能以任何身份登录。面板写完会自己收紧。
+
+两条路径都要管理员权限，所以「Add key」和「Reload」会弹 UAC。GUI 本身不提权：
+串口守护进程不该要管理员，提权只发生在写这一个文件的时候。
+
+改动立即生效，不用重启 sshd。
+
+挂载点这一侧还需要装 OpenSSH Server 并放行防火墙，见
+[`deployment.md`](docs/deployment.md#windows-跳板机)。
 
 Windows 上用 COM 号直接引用端口，`sercon attach -t winjump COM3`。
 
@@ -285,6 +350,7 @@ internal/audit/       JSONL 审计流水
 internal/daemon/      守护进程的分离启动
 internal/ipc/         socket 端点解析与单实例绑定
 internal/terminal/    客户端原始终端模式
+internal/sshauth/      sshd 密钥文件定位、解析与写入
 internal/version/     版本号唯一来源
 internal/relay/       中继传输（已实现，未接入 CLI）
 internal/config/      配置

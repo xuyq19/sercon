@@ -7,6 +7,34 @@ releases use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **SSH key panel in the Windows GUI.** A window that installs a client's public
+  key so it can reach the machine. It picks the file sshd actually reads — for an
+  administrator that is `%ProgramData%\ssh\administrators_authorized_keys`, not
+  `~/.ssh/authorized_keys` — tightens the ACL sshd requires, and raises a UAC
+  prompt for the write. The GUI itself still runs un-elevated; only this one
+  action elevates.
+- **`sercon attach` accepts a pipe**, so the remote console behaves like the local
+  device: `sercon attach ... < /dev/null | grep -m1 panic` reads until the match,
+  and `< /dev/null` alone reads until interrupted, the same as `cat /dev/ttyS0`.
+  Status notes move to stderr so they cannot corrupt the stream, the escape key
+  and raw mode are skipped (every byte is meant literally), and reconnecting is
+  suppressed because a shell pipeline that ends should end.
+- **`hack/gui-drive.py`** for driving the GUI from a script, and
+  `hack/screenshot-window.py` now takes a window class so it can capture the key
+  panel as well as the main window.
+
+### Fixed
+
+- Two bugs in the new `internal/sshauth`, both found by testing against a real
+  account database rather than a fixture: `IsAdmin("")` answered false for an
+  un-elevated administrator, because UAC hands such a process a filtered token
+  with the group marked deny-only and `CheckTokenMembership` reports that as
+  absent — so the panel would have pointed at the wrong file, which is exactly
+  the failure the package exists to prevent. `Remove` also re-rendered the file
+  even when nothing matched, rewriting line endings for no reason.
+
 ## [0.1.0] - 2026-09-10
 
 First working version. Verified end to end against real hardware rather than
