@@ -467,23 +467,73 @@ COM5 时，旧引用会标 offline 留在列表里，新号自动开新日志。
 
 ## 构建
 
-不需要 `make`，也不需要任何第三方依赖（纯标准库）：
+零第三方依赖，纯标准库。
+
+**版本号只有一个来源：`internal/version`**，链接时用 ldflags 注入，三个二进制都从
+那里读。代码里任何 `const version = "..."` 都已删除——那正是打 tag 时会漏掉的地方。
 
 ```bash
-# 本机
+# 全平台 + 版本注入（Linux / CI 上最省事）
+make build
+
+# 只要本机的两个二进制
 go build -o seriald ./cmd/seriald
 go build -o sctl ./cmd/sctl
 
-# 交叉编译（CGO 关掉，得到静态二进制）
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/seriald-linux-amd64 ./cmd/seriald
-CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o dist/sctl-windows-amd64.exe ./cmd/sctl
-
-# 或者全平台
-make build
+# 手动注入版本（等价于 make build 做的事）
+MODULE=$(go list -m)
+go build -ldflags "\
+  -X $MODULE/internal/version.Version=$(git describe --tags --always --dirty) \
+  -X $MODULE/internal/version.Commit=$(git rev-parse --short HEAD) \
+  -X $MODULE/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  -o seriald ./cmd/seriald
 ```
 
-`make build` 会顺带构建 `seriald-gui.exe`（Windows x64）并把 manifest 一起复制到
-`dist/`。
+`make build` 构建 5 个平台 × 2 个二进制，外加 `seriald-gui.exe`（Windows x64，并把
+manifest 一起复制到 `dist/`）。
+
+注入过版本的二进制会自报家门：
+
+```
+$ ./seriald version
+seriald v0.1.0+db5b9b7 (protocol v1, go1.27.1, linux/amd64)
+```
+
+裸 `go build` 出来的显示 `devel`——一眼就能看出它不是发布流程产出的东西。
+
+### 这台 Windows 机器上的注意事项
+
+`make` 和 `go` 都不在 PATH 上（Go 装在隔离目录里，`make` 根本没装）。本地构建要么
+用完整的 go 路径，要么先补一个 make，比如 `winget install GnuWin32.Make`。
+
+## 版本与发布
+
+版本走 SemVer，tag 形如 `v0.1.0`。**打 tag 就是发布**：
+
+```bash
+git tag -a v0.1.0 -m "first release"
+git push origin v0.1.0
+```
+
+`release.yml` 在 `v*` tag 上构建全部平台、生成校验和、创建 Release。它还会校验
+二进制上报的版本号和 tag 一致，不一致就直接失败——不会发出一个说不出自己是谁的二进制。
+
+Release 里会有：
+
+| 内容 | 来源 |
+|---|---|
+| `seriald-{linux,windows,darwin}-{amd64,arm64}` | 交叉编译，5 个平台 |
+| `sctl-*` 同上 | 交叉编译 |
+| `seriald-gui.exe` + `seriald-gui.exe.manifest` | Windows GUI |
+| `SHA256SUMS.txt` | `sha256sum` |
+| Source code (zip / tar.gz) | **GitHub 自动附带**，不需要额外步骤 |
+
+`ci.yml` 在 push 到 main 和 PR 上跑：gofmt、`go vet`、`GOOS=windows go vet`、`go test
+-race`、全平台构建、shell 脚本语法检查。
+
+其中 **`GOOS=windows go vet` 那步不能省**：linux 上的 vet 会静默跳过所有带 windows
+构建约束的文件，而这棵树里差不多三分之一是 windows-only 的，最容易出问题的那部分
+正好在里面。
 
 ## 代码结构
 
@@ -500,5 +550,7 @@ internal/daemon/      守护进程的分离启动
 internal/hub/         端口状态机、广播、端口锁、backlog
 internal/portlog/     按天轮转的串口日志
 internal/audit/       JSONL 审计流水
+internal/version/     版本号的唯一来源（链接时注入）
+internal/relay/       中继传输（已实现，未接入 CLI，未在真实 NAT 上验证）
 internal/config/      配置加载与默认值
 ```
