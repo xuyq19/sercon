@@ -666,7 +666,7 @@ func refresh() {
 	}
 
 	online, _, _ := tally(ports)
-	footer := railFooterFor(version.Short(), len(ports), online, loggedSummary(ports))
+	footer := railFooterFor(version.Build(), len(ports), online, loggedSummary(ports))
 	if footer != railFooterText {
 		setRailFooter(footer)
 		changed = true
@@ -802,8 +802,9 @@ func shutdown() {
 	})
 }
 
-// versionText is the footer's right-hand label.
-func versionText() string { return version.Short() }
+// versionText is the footer's right-hand label. It is the compact form, because
+// the footer's single row already carries the socket path on the left.
+func versionText() string { return version.Build() }
 
 // rowIsSelected reports whether a row is the operator's current selection.
 func rowIsSelected(ref string) bool { return gui != nil && gui.selected == ref }

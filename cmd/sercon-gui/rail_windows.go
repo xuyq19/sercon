@@ -117,10 +117,19 @@ func (e *railEntry) step(now int64) bool {
 }
 
 // paintRail draws the entire sidebar.
+//
+// Everything is clipped to the rail. The rail is painted last, over the content
+// area, so anything that overflows its column lands on top of the buttons
+// rather than being hidden — which is what the build line did once the version
+// gained a timestamp. The clip makes the rail's width a hard boundary instead
+// of something every line of text has to be trusted to respect.
 func paintRail(hdc uintptr, l *layout) {
 	if l.rail.Right-l.rail.Left == 0 {
 		return
 	}
+
+	clip := clipTo(hdc, l.rail)
+	defer clip.release()
 
 	fillRect(hdc, l.rail, colRailBG)
 
@@ -203,9 +212,10 @@ var railFooterCache []string
 
 func railFooterLines() []string { return railFooterCache }
 
-// railFooterFor renders the footer block. The version line is only shown when
-// it is not "devel", because on a development build it is noise and the rail
-// has four lines of room, not five.
+// railFooterFor renders the footer block.
+//
+// The version is the compact form, not version.Short(): the rail is 168px wide
+// and the full identity does not fit. The commit is what identifies the build.
 func railFooterFor(version string, ports, online int, logged string) string {
 	lines := []string{
 		fmt.Sprintf("build %s", version),
