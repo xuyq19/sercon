@@ -1,4 +1,7 @@
 GO      ?= go
+# WINDRES may be set explicitly for a cross toolchain. The default first uses a
+# native installation, then MinGW's x86_64 compiler used by the release job.
+WINDRES ?= $(shell command -v windres 2>/dev/null || command -v x86_64-w64-mingw32-windres 2>/dev/null)
 BINDIR  := dist
 MODULE  := $(shell $(GO) list -m 2>/dev/null || echo sercond)
 
@@ -70,8 +73,12 @@ gui:
 	@mkdir -p $(BINDIR)
 	@rm -f cmd/sercon-gui/resource_windows.syso
 	@if [ -f cmd/sercon-gui/assets/sercon-gui.ico ]; then \
-	  command -v windres >/dev/null || { echo "windres is required to embed the GUI icon"; exit 1; }; \
-	  windres -i cmd/sercon-gui/resource_windows.rc -O coff -o cmd/sercon-gui/resource_windows.syso; \
+	  test -n "$(WINDRES)" && command -v "$(WINDRES)" >/dev/null || { \
+	    echo "GUI icon exists but no Windows resource compiler was found."; \
+	    echo "Install binutils-mingw-w64 (x86_64-w64-mingw32-windres), install windres, or set WINDRES=/path/to/windres."; \
+	    exit 1; \
+	  }; \
+	  "$(WINDRES)" --target=pe-x86-64 -i cmd/sercon-gui/resource_windows.rc -O coff -o cmd/sercon-gui/resource_windows.syso; \
 	fi
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build \
 	  -ldflags="$(LDFLAGS) -H=windowsgui" \

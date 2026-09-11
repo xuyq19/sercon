@@ -41,6 +41,9 @@ jobs:
             *) echo "tag '$TAG' is not of the form vX.Y.Z"; exit 1 ;;
           esac
 
+      - name: install Windows resource compiler
+        run: sudo apt-get update && sudo apt-get install --yes binutils-mingw-w64
+
       - name: build
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
