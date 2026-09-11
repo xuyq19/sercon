@@ -372,7 +372,7 @@ func paintRow(hdc uintptr, l *layout, r *rowFade, y, h int32, hovered bool) {
 	// property of the whole row and is painted by the caller of this function
 	// when it exists.
 	if hovered && hover.row.value > 0.01 {
-		fillRect(hdc, full, lerp(colBackground, colRowSel, hover.row.value*alpha))
+		fillRectBlend(hdc, full, colBackground, colRowSel, hover.row.value*alpha)
 	} else if rowIsSelected(r.ref) {
 		fillRect(hdc, full, colRowSel)
 	}
@@ -449,12 +449,12 @@ func paintStateCapsule(hdc uintptr, x, y int32, p proto.PortInfo, alpha float64)
 	r := rectAt(x, y, w, 20)
 	// The capsule fades with the row so a row appearing does not have its
 	// strongest element pop in first.
-	roundRectFilled(hdc, r, 10, lerp(colBackground, bg, alpha), 0)
+	roundRectBlend(hdc, r, 10, colBackground, bg, alpha, 0)
 
 	// The dot carries the state as well as the word, which is what makes the
 	// column scannable without reading.
 	dot := rectAt(r.Left+9, r.Top+7, 6, 6)
-	roundRectFilled(hdc, dot, 3, lerp(colBackground, fg, alpha), 0)
+	roundRectBlend(hdc, dot, 3, colBackground, fg, alpha, 0)
 
 	textAt(hdc, r.Left+20, r.Top+3, label, lerp(colBackground, fg, alpha))
 }
@@ -470,7 +470,7 @@ func paintButtons(hdc uintptr, l *layout) {
 		if h <= 0.01 {
 			roundRectFilled(hdc, r, 8, colBackground, colRule)
 		} else {
-			roundRectFilled(hdc, r, 8, lerp(colBackground, colRowSel, h), colRule)
+			roundRectBlend(hdc, r, 8, colBackground, colRowSel, h, colRule)
 		}
 		pSelectObject.Call(hdc, fonts.body)
 		tw := textWidth(hdc, labels[i])

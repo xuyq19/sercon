@@ -49,6 +49,7 @@ var (
 	pSendMessageW          = user32.NewProc("SendMessageW")
 	pSetWindowTextW        = user32.NewProc("SetWindowTextW")
 	pLoadCursorW           = user32.NewProc("LoadCursorW")
+	pSetCursor             = user32.NewProc("SetCursor")
 	pMessageBoxW           = user32.NewProc("MessageBoxW")
 	pSetProcessDPIAware    = user32.NewProc("SetProcessDPIAware")
 	pMoveWindow            = user32.NewProc("MoveWindow")
@@ -601,6 +602,12 @@ type hbrush uintptr
 // none: the sidebar alone would otherwise create and destroy half a dozen
 // brushes per frame, and at 60 frames a second that is the difference between
 // a window that idles at 0% CPU and one that never settles.
+//
+// The cache is only correct for colours that come from the palette. A blended
+// colour is a different value on every animation frame, and caching those grows
+// the process's GDI object count without bound — GDI objects are a fixed
+// per-process quota, so a window left open for days would eventually stop being
+// able to draw anything. Anything animated goes through tempBrush instead.
 var (
 	brushCache = map[uint32]hbrush{}
 )
@@ -613,6 +620,30 @@ func brush(color uint32) hbrush {
 	b := hbrush(r)
 	brushCache[color] = b
 	return b
+}
+
+// tempBrush creates a brush for a single fill, with the function that releases
+// it. It exists for colours that will not be seen again — a blend between two
+// palette colours at an animation frame's progress.
+//
+// The cost is one CreateSolidBrush and one DeleteObject per blended fill, which
+// is a local operation with no system-wide lock. That is much cheaper than the
+// alternative, which is leaking a GDI object per frame.
+func tempBrush(color uint32) (hbrush, func()) {
+	r, _, _ := pCreateSolidBrush.Call(uintptr(color))
+	b := hbrush(r)
+	return b, func() { pDeleteObject.Call(uintptr(r)) }
+}
+
+// fillRectBlend fills a rect with a colour blended between a and b by t.
+//
+// It is the animated counterpart of fillRect: same drawing, but without putting
+// the result in the brush cache. t is clamped, so a caller can pass a raw
+// animation value without checking it.
+func fillRectBlend(hdc uintptr, r rect, a, b uint32, t float64) {
+	br, release := tempBrush(lerp(a, b, t))
+	defer release()
+	pFillRect.Call(hdc, uintptr(unsafe.Pointer(&r)), uintptr(br))
 }
 
 // penCache holds the one-pixel pens used for hairlines and outlines. Width 1
@@ -705,6 +736,22 @@ func vLine(hdc uintptr, x, y0, y1 int32, color uint32) {
 // outline undrawn, so both are always supplied.
 func roundRectFilled(hdc uintptr, r rect, radius int32, fill, outline uint32) {
 	fb := brush(fill)
+	roundRectWith(hdc, r, radius, uintptr(fb), outline)
+}
+
+// roundRectBlend is the animated counterpart of roundRectFilled.
+//
+// The fill colour is blended between a and b by t and the brush is released
+// afterwards, so a capsule that fades in does not leave a brush behind for
+// every frame of the fade.
+func roundRectBlend(hdc uintptr, r rect, radius int32, a, b uint32, t float64, outline uint32) {
+	fb, release := tempBrush(lerp(a, b, t))
+	defer release()
+	roundRectWith(hdc, r, radius, uintptr(fb), outline)
+}
+
+// roundRectWith draws a rounded rectangle with an existing brush.
+func roundRectWith(hdc uintptr, r rect, radius int32, fillBrush uintptr, outline uint32) {
 	var p uintptr
 	if outline != 0 {
 		p = pen(outline)
@@ -712,7 +759,7 @@ func roundRectFilled(hdc uintptr, r rect, radius int32, fill, outline uint32) {
 		p, _, _ = pGetStockObject.Call(nullPen)
 	}
 
-	oldB, _, _ := pSelectObject.Call(hdc, uintptr(fb))
+	oldB, _, _ := pSelectObject.Call(hdc, fillBrush)
 	oldP, _, _ := pSelectObject.Call(hdc, p)
 
 	pRoundRect.Call(hdc,

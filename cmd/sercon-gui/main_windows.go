@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -278,7 +279,74 @@ func messageLoop() {
 	}
 }
 
+// guardCallback logs a panic from a window procedure before letting it through.
+//
+// A windowsgui binary has no console. A panic inside a callback therefore
+// prints nowhere, and the only visible symptom is the process disappearing —
+// no message, no stack, no exit code to look up. That is the least debuggable
+// failure this program can have, and it is indistinguishable from a clean exit
+// to anyone watching.
+//
+// This turns it into a gui.log entry carrying the stack. The panic is then
+// re-raised rather than swallowed: a window procedure that has panicked has
+// left its state suspect, and continuing to paint from it produces damage that
+// is harder to explain than a clean stop.
+func guardCallback(what string, args ...any) {
+	r := recover()
+	if r == nil {
+		return
+	}
+	dbg("PANIC in %s (%v): %v\n%s", what, args, r, debug.Stack())
+	panic(r)
+}
+
+// msgName renders a window message as a name, for panic reports.
+//
+// A panic inside a window procedure is re-raised, so the stack in gui.log is
+// the only account of what happened. Without the message the report says the
+// panic occurred in wndProc, which covers every message the window receives.
+// The names are the ones worth having in a log; anything else is reported as
+// its number, which is what a debugger session wants anyway.
+func msgName(m uint32) string {
+	switch m {
+	case wmCreate:
+		return "WM_CREATE"
+	case wmDestroy:
+		return "WM_DESTROY"
+	case wmSize:
+		return "WM_SIZE"
+	case wmPaint:
+		return "WM_PAINT"
+	case wmClose:
+		return "WM_CLOSE"
+	case wmEraseBkgnd:
+		return "WM_ERASEBKGND"
+	case wmSetCursor:
+		return "WM_SETCURSOR"
+	case wmGetMinMaxInfo:
+		return "WM_GETMINMAXINFO"
+	case wmSetFont:
+		return "WM_SETFONT"
+	case wmMouseMove:
+		return "WM_MOUSEMOVE"
+	case wmLButtonDown:
+		return "WM_LBUTTONDOWN"
+	case wmLButtonUp:
+		return "WM_LBUTTONUP"
+	case wmMouseLeave:
+		return "WM_MOUSELEAVE"
+	case wmNotify:
+		return "WM_NOTIFY"
+	case wmCommand:
+		return "WM_COMMAND"
+	case wmTimer:
+		return "WM_TIMER"
+	}
+	return fmt.Sprintf("WM_%#04x", m)
+}
+
 func wndProc(hwnd uintptr, m uint32, wParam, lParam uintptr) uintptr {
+	defer guardCallback("wndProc", msgName(m), fmt.Sprintf("wParam=%#x lParam=%#x", wParam, lParam))
 	switch m {
 	case wmCreate:
 		onCreate(hwnd)
@@ -310,12 +378,7 @@ func wndProc(hwnd uintptr, m uint32, wParam, lParam uintptr) uintptr {
 		onMouseUp(lParam)
 		return 0
 	case wmSetCursor:
-		// A cursor over a clickable area is the cheapest affordance there is.
-		if gui != nil && gui.hitTestable(lParam) {
-			pLoadCursorW.Call(0, idcHand)
-			return 1
-		}
-		return 0
+		return onSetCursor(lParam)
 	case wmGetMinMaxInfo:
 		info := (*minMaxInfo)(uptrToPtr(lParam))
 		info.MinTrackSize = point{X: 720, Y: 460}
@@ -459,9 +522,38 @@ func demoHolding() bool {
 
 // --- input -----------------------------------------------------------------
 
+// htClient is the hit-test code for the client area, the low word of
+// WM_SETCURSOR's lParam.
+const htClient = 1
+
+// onSetCursor returns the hand cursor over anything clickable.
+//
+// WM_SETCURSOR's lParam is not a point. Its low word is the hit-test code and
+// its high word is the mouse message that triggered it. This was being read as
+// a pair of coordinates, so the "position" was always (1, <message id>) — a
+// point that lands in the gutter between the rail and the content area for
+// every message there is. The test therefore always answered no and the hand
+// never appeared over anything, which is a worse outcome than a wrong cursor:
+// it silently removed the only affordance the custom-painted controls have.
+//
+// The real position has to be asked for, and only inside the client area.
+func onSetCursor(lParam uintptr) uintptr {
+	if gui == nil {
+		return 0
+	}
+	if int32(int16(lParam&0xFFFF)) != htClient {
+		return 0
+	}
+	p, ok := cursorPos(gui.hwnd)
+	if !ok || !gui.hitTestable(p) {
+		return 0
+	}
+	pSetCursor.Call(loadCursor(idcHand))
+	return 1
+}
+
 // hitTestable reports whether a point is over something clickable.
-func (g *guiState) hitTestable(lParam uintptr) bool {
-	p := point{X: int32(int16(lParam & 0xFFFF)), Y: int32(int16((lParam >> 16) & 0xFFFF))}
+func (g *guiState) hitTestable(p point) bool {
 	if _, ok := g.lyt.railAt(p); ok {
 		return true
 	}

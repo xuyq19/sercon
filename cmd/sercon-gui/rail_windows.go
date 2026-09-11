@@ -160,11 +160,15 @@ func paintRailEntry(hdc uintptr, e *railEntry) {
 
 	// The selection and hover fills are independent: a selected item can also
 	// be hovered, and the two are layered rather than one replacing the other.
+	//
+	// Both go through the blend helpers rather than fillRect. These values
+	// change every frame of a fade, and a brush per distinct value would leak
+	// one GDI object per frame — see tempBrush.
 	if h := e.hover.value; h > 0.01 {
-		fillRect(hdc, r, lerp(colRailBG, colRailHover, h))
+		fillRectBlend(hdc, r, colRailBG, colRailHover, h)
 	}
 	if s := e.sel.value; s > 0.01 {
-		fillRect(hdc, r, lerp(colRailBG, colRailSel, s))
+		fillRectBlend(hdc, r, colRailBG, colRailSel, s)
 	}
 
 	// The accent bar grows out of the left edge with the selection rather than
