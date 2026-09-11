@@ -11,6 +11,12 @@
 // The window must be started in the interactive session. An SSH session and the
 // desktop belong to different window stations, so a process spawned from SSH
 // could run this code and never be able to draw it.
+//
+// The client area is painted by hand. Nothing in this package uses a Static,
+// Button or ListView control except where a real edit field or message box is
+// needed: the sidebar, the table and the buttons are all GDI, because that is
+// what allows the hover and transition animations, and because a stock
+// ListView cannot draw a rounded capsule or fade a row.
 package main
 
 import (
@@ -38,46 +44,27 @@ const (
 	// The title stays fixed. Putting the port count in it would make the window
 	// jump around as adapters come and go, and it makes the window impossible
 	// to find by name from a script.
-	appTitle    = "sercon — serial console capture"
-	classNameID = "serconGuiWindow"
-	// keyClassName is the SSH key panel. It is a second top-level window
-	// rather than a dialog so that it shares this process's message loop.
+	appTitle     = "sercon — serial console capture"
+	classNameID  = "serconGuiWindow"
 	keyClassName = "serconKeyWindow"
 
-	idList     = 1001
-	idOpenLogs = 1002
-	idCopyCmd  = 1003
-	idRefresh  = 1004
-	idKeys     = 1005
+	// Command ids. They are shared by the sidebar entries and the action
+	// buttons, which is why the sidebar ids start well clear of the buttons'.
+	idOpenLogs = 1001
+	idCopyCmd  = 1002
+	idRefresh  = 1003
+	idKeys     = 1004
+
+	// Sidebar section ids. Only "Ports" is implemented; the others are visible
+	// as the shape of what this window is for, and are inert.
+	idRailPorts    = 1101
+	idRailLogs     = 1102
+	idRailKeys     = 1103
+	idRailSettings = 1104
 
 	timerRefresh = 1
+
 	refreshEvery = 1000 // milliseconds
-
-	rowHeight = 26
-)
-
-// Palette. COLORREF is 0x00BBGGRR, which is why these do not read like hex
-// colour codes.
-const (
-	colBackground = 0x00FFFFFF
-	colText       = 0x002A2C2C
-	colMuted      = 0x00686B6B
-	colOnline     = 0x00759E1D
-	colOffline    = 0x002D2DA3
-	colBusy       = 0x001775BA
-)
-
-// Column indices, used by the renderer and the custom-draw colouring.
-const (
-	colRef = iota
-	colState
-	colOwner
-	colDev
-	colBaud
-	colObs
-	colLog
-	colErr
-	colCount
 )
 
 // wndProcCallback is package-level so the callback trampoline is never
@@ -101,58 +88,35 @@ func init() {
 	runtime.LockOSThread()
 }
 
-type column struct {
-	title string
-	width int32
-}
-
-// columns defines the list layout, left to right in the order an operator
-// checks things: which port, whether it is alive, who is on it, then the
-// reference material.
-//
-// Widths total under the default client width on purpose. A horizontal
-// scrollbar in a two-row table is pure friction.
-var columns = []column{
-	{"port", 260},
-	{"state", 70},
-	{"owner", 150},
-	{"device", 90},
-	{"baud", 60},
-	{"obs", 45},
-	{"log", 280},
-	{"last error", 200},
-}
-
 type guiState struct {
-	hwnd     uintptr
-	header   uintptr
-	subtitle uintptr
-	list     uintptr
-	status   uintptr
-	btns     []uintptr
+	hwnd uintptr
 
-	fontUI      uintptr
-	fontHeading uintptr
-	bgBrush     uintptr
+	fontsReady bool
+
+	// lyt is recomputed on every resize and read by the paint and hit-test
+	// paths. Nothing else computes control positions.
+	lyt layout
+
+	// surf is the off-screen buffer every repaint is composed into.
+	surf surface
 
 	manager  *hub.Manager
 	listener net.Listener
 	sock     string
 	logDir   string
 
-	// rows is the port references currently in the list, in order. It is what
-	// lets refresh tell "same ports, changed values" apart from "the set of
-	// ports changed", which decides whether the operator's selection can be
-	// preserved.
-	rows []string
-	// snapshot is the same table the list is showing, kept so the custom-draw
-	// handler can colour a cell without querying the manager per paint.
-	snapshot []proto.PortInfo
+	// ports mirrors the manager's table for the paint path, so a repaint never
+	// takes the manager lock.
+	ports []proto.PortInfo
 
-	// flash is a transient message shown in place of the socket path, so that
-	// pressing a button produces visible feedback even though the live summary
-	// refreshes every second.
-	flash      string
+	// selected is the port reference the operator has chosen, kept by
+	// reference rather than by row index so it survives rows moving.
+	selected string
+
+	// flash is a transient message shown in the footer, so that pressing a
+	// button produces visible feedback even though the live summary refreshes
+	// every second.
+	flashMsg   string
 	flashUntil time.Time
 
 	// remoteStop is set when a client asked the daemon to shut down. Such a
@@ -160,7 +124,8 @@ type guiState struct {
 	// that a human clicking the X would get.
 	remoteStop atomic.Bool
 
-	once sync.Once
+	painting bool
+	once     sync.Once
 }
 
 var gui *guiState
@@ -207,14 +172,6 @@ func openLog() {
 }
 
 func runGUI() error {
-	icc := initCommonControlsEx{
-		Size: uint32(unsafe.Sizeof(initCommonControlsEx{})),
-		ICC:  iccListViewClasses,
-	}
-	if r, _, errno := pInitCommonControlsEx.Call(uintptr(unsafe.Pointer(&icc))); r == 0 {
-		return fmt.Errorf("InitCommonControlsEx: %v", errno)
-	}
-
 	if err := becomeDaemon(); err != nil {
 		return err
 	}
@@ -326,24 +283,42 @@ func wndProc(hwnd uintptr, m uint32, wParam, lParam uintptr) uintptr {
 	case wmCreate:
 		onCreate(hwnd)
 		return 0
+	case wmEraseBkgnd:
+		// Claiming the erase stops the window from painting its background
+		// before every repaint, which is what would otherwise show as a flash
+		// of the old contents.
+		return 1
+	case wmPaint:
+		onPaint(hwnd)
+		return 0
 	case wmSize:
 		onSize()
 		return 0
 	case wmTimer:
-		if wParam == timerRefresh {
-			refresh()
-		}
+		onTimer(wParam)
 		return 0
-	case wmNotify:
-		return onNotify(lParam)
-	case wmCtlColorStatic:
-		return onCtlColor(wParam, lParam)
-	case wmCommand:
-		onCommand(uint16(wParam & 0xFFFF))
+	case wmMouseMove:
+		onMouseMove(lParam)
+		return 0
+	case wmMouseLeave:
+		onMouseLeave()
+		return 0
+	case wmLButtonDown:
+		onMouseDown(lParam)
+		return 0
+	case wmLButtonUp:
+		onMouseUp(lParam)
+		return 0
+	case wmSetCursor:
+		// A cursor over a clickable area is the cheapest affordance there is.
+		if gui != nil && gui.hitTestable(lParam) {
+			pLoadCursorW.Call(0, idcHand)
+			return 1
+		}
 		return 0
 	case wmGetMinMaxInfo:
 		info := (*minMaxInfo)(uptrToPtr(lParam))
-		info.MinTrackSize = point{X: 820, Y: 400}
+		info.MinTrackSize = point{X: 720, Y: 460}
 		return 0
 	case wmClose:
 		dbg("WM_CLOSE")
@@ -356,6 +331,8 @@ func wndProc(hwnd uintptr, m uint32, wParam, lParam uintptr) uintptr {
 		return 0
 	case wmDestroy:
 		dbg("WM_DESTROY")
+		anim.stop()
+		gui.surf.release()
 		shutdown()
 		pPostQuitMessage.Call(0)
 		return 0
@@ -365,325 +342,446 @@ func wndProc(hwnd uintptr, m uint32, wParam, lParam uintptr) uintptr {
 
 func onCreate(hwnd uintptr) {
 	gui.hwnd = hwnd
-	gui.fontUI = createUIFont()
-	gui.fontHeading = createHeadingFont()
-	gui.bgBrush = solidBrush(colBackground)
 
-	// Two lines of hierarchy at the top. Without them the window reads as a
-	// bare table with buttons bolted underneath.
-	gui.header = createWindow(className("Static"), "Serial console capture",
-		wsChild|wsVisible, 0, 12, 12, 100, 24, hwnd, 0)
-	setFont(gui.header, gui.fontHeading)
-
-	gui.subtitle = createWindow(className("Static"), "starting…",
-		wsChild|wsVisible, 0, 12, 38, 100, 18, hwnd, 0)
-	setFont(gui.subtitle, gui.fontUI)
-
-	gui.list = createWindow(className("SysListView32"), "",
-		wsChild|wsVisible|wsTabStop|lvsReport|lvsSingleSel|lvsShowSelAlways,
-		wsExClientEdge,
-		0, 0, 100, 100, hwnd, idList)
-	setFont(gui.list, gui.fontUI)
-
-	// No gridlines. A grid of hairlines through every cell is the single
-	// biggest reason a stock ListView looks dated; full-row selection plus a
-	// little vertical padding reads far better and costs nothing.
-	ext := uintptr(lvsExFullRowSelect | lvsExDoubleBuffer)
-	pSendMessageW.Call(gui.list, lvmSetExtendedListViewStyle, ext, ext)
-
-	// Rows are sized to the small image list, so an empty one is the only
-	// supported way to get padding inside a report row.
-	setImageList(gui.list, createImageList(rowHeight))
-
-	for i, col := range columns {
-		c := lvColumn{
-			Mask:     lvcfText | lvcfFmt | lvcfWidth | lvcfSubItem,
-			Fmt:      lvcfmtLeft,
-			Cx:       col.width,
-			ISubItem: int32(i),
-			PszText:  utf16Ptr(col.title),
-		}
-		pSendMessageW.Call(gui.list, lvmInsertColumnW, uintptr(i), uintptr(unsafe.Pointer(&c)))
+	if err := initCommonControls(); err != nil {
+		dbg("InitCommonControlsEx: %v", err)
 	}
 
-	labels := []string{"Open log folder", "Copy attach command", "SSH keys", "Refresh"}
-	ids := []uintptr{idOpenLogs, idCopyCmd, idKeys, idRefresh}
-	for i, label := range labels {
-		b := createWindow(className("Button"), label,
-			wsChild|wsVisible|wsTabStop|wsGroup,
-			0, 0, 0, 170, 32, hwnd, ids[i])
-		setFont(b, gui.fontUI)
-		gui.btns = append(gui.btns, b)
+	initFonts()
+	gui.fontsReady = true
+
+	// The key panel is still a real window with real controls, so the class
+	// has to be registered up front even though the panel is created lazily.
+	if err := registerClass(keyClassName, keyPanelProcCallback); err != nil {
+		dbg("register key class: %v", err)
 	}
 
-	gui.status = createWindow(className("Static"), "",
-		wsChild|wsVisible, 0, 0, 0, 100, 20, hwnd, 0)
-	setFont(gui.status, gui.fontUI)
+	onSize()
 
+	// The refresh timer fires every second regardless of whether anything
+	// changed, which is what keeps the window live when a client attaches. The
+	// animation timer is separate and only runs while something moves.
 	pSetTimer.Call(hwnd, timerRefresh, refreshEvery, 0)
+
 	refresh()
+	paint()
+	startDemo()
+}
+
+func initCommonControls() error {
+	icc := initCommonControlsEx{
+		Size: uint32(unsafe.Sizeof(initCommonControlsEx{})),
+		ICC:  iccListViewClasses,
+	}
+	if r, _, errno := pInitCommonControlsEx.Call(uintptr(unsafe.Pointer(&icc))); r == 0 {
+		return fmt.Errorf("InitCommonControlsEx: %v", errno)
+	}
+	return nil
 }
 
 func onSize() {
+	if gui == nil || gui.hwnd == 0 {
+		return
+	}
 	r := clientRect(gui.hwnd)
-	w := r.Right - r.Left
-	h := r.Bottom - r.Top
-
-	const (
-		margin  int32 = 12
-		headerH int32 = 24
-		subH    int32 = 18
-		gap     int32 = 8
-		btnH    int32 = 32
-		btnW    int32 = 170
-		statusH int32 = 20
-	)
-
-	headerY := margin
-	subY := headerY + headerH
-	listY := subY + subH + gap
-
-	statusY := h - margin - statusH
-	btnY := statusY - gap - btnH
-	listH := btnY - gap - listY
-
-	// A window dragged small enough to invert the layout should still produce a
-	// sane control geometry rather than negative widths.
-	if listH < 60 {
-		listH = 60
+	w, h := r.Right-r.Left, r.Bottom-r.Top
+	if w <= 0 || h <= 0 {
+		return
 	}
-	if w-2*margin < 200 {
-		w = 2*margin + 200
-	}
-
-	moveWindow(gui.header, margin, headerY, w-2*margin, headerH)
-	moveWindow(gui.subtitle, margin, subY, w-2*margin, subH)
-	moveWindow(gui.list, margin, listY, w-2*margin, listH)
-
-	// Right-align the button row so the controls stay put as the window
-	// resizes, instead of drifting with the left edge.
-	x := w - margin
-	for i := len(gui.btns) - 1; i >= 0; i-- {
-		x -= btnW
-		moveWindow(gui.btns[i], x, btnY, btnW, btnH)
-		x -= gap
-	}
-
-	moveWindow(gui.status, margin, statusY, w-2*margin, statusH)
+	gui.lyt = buildLayout(w, h)
+	syncRail(&gui.lyt)
+	paint()
 }
 
-// onCtlColor renders the header, subtitle and status line in flat colours on
-// the window background. Without it the Static controls paint themselves with
-// the default system face colour and the window looks like a settings dialog
-// from 2001.
-func onCtlColor(hdc, control uintptr) uintptr {
-	setBkMode(hdc, transparent)
-	if control == gui.subtitle || control == gui.status {
-		setTextColor(hdc, colMuted)
-	} else {
-		setTextColor(hdc, colText)
+// onPaint composes the whole window off-screen and blits it in one go.
+func onPaint(hwnd uintptr) {
+	var ps paintStruct
+	dc, _, _ := pBeginPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
+	defer pEndPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
+
+	if gui == nil || !gui.fontsReady {
+		return
 	}
-	return gui.bgBrush
+	r := clientRect(hwnd)
+	w, h := r.Right-r.Left, r.Bottom-r.Top
+
+	// A repaint can be triggered from inside a paint — the row fades call back
+	// into invalidate — so a second entry is dropped rather than drawing into
+	// the surface the first one is still composing.
+	if gui.painting {
+		return
+	}
+	gui.painting = true
+	defer func() { gui.painting = false }()
+
+	if !gui.surf.ensure(hwnd, w, h) {
+		// Falling back to direct drawing keeps the window usable if the
+		// bitmap could not be allocated, at the cost of the flicker the
+		// surface exists to avoid.
+		paintInto(dc, gui.lyt, nowMS())
+		return
+	}
+
+	now := nowMS()
+	paintInto(gui.surf.dc, gui.lyt, now)
+	gui.surf.flush(hwnd)
 }
 
-// onNotify colours the state and owner cells.
+// paintInto renders the whole window into a device context.
+func paintInto(dc uintptr, l layout, now int64) {
+	fillRect(dc, l.client, colBackground)
+	paintContent(dc, &l, gui.ports, gui.sock, gui.flashText(), now)
+	paintRail(dc, &l)
+}
+
+// paint schedules a repaint.
+func paint() {
+	if gui == nil || gui.hwnd == 0 {
+		return
+	}
+	pInvalidateRect.Call(gui.hwnd, 0, 0)
+}
+
+func onTimer(id uintptr) {
+	switch id {
+	case timerRefresh:
+		refresh()
+	case animTimerID:
+		now := nowMS()
+		// A demo stage that changes a value has to keep changing it, because
+		// the refresh tick re-seeds the counters from the real port table.
+		demoHold(now)
+		moving := anim.tick(now)
+		pruneRows()
+		traceAnim("frame")
+		paint()
+		if !moving && !demoHolding() {
+			anim.stop()
+		}
+	case demoTimerID:
+		advanceDemo()
+	}
+}
+
+// demoHolding reports whether the animation clock must keep running for a demo
+// stage's sake. Outside a demo it is always false, so the timer stops the
+// moment nothing is moving.
+func demoHolding() bool {
+	if !demoOn {
+		return false
+	}
+	stages := demoStages()
+	if demoIndex < 0 || demoIndex >= len(stages) {
+		return false
+	}
+	st := stages[demoIndex]
+	return st.hold != nil
+}
+
+// --- input -----------------------------------------------------------------
+
+// hitTestable reports whether a point is over something clickable.
+func (g *guiState) hitTestable(lParam uintptr) bool {
+	p := point{X: int32(int16(lParam & 0xFFFF)), Y: int32(int16((lParam >> 16) & 0xFFFF))}
+	if _, ok := g.lyt.railAt(p); ok {
+		return true
+	}
+	if g.lyt.buttonAt(p) >= 0 {
+		return true
+	}
+	return g.lyt.rowAt(p, len(rows.items)) >= 0
+}
+
+// onMouseMove and the other input handlers all resolve the client-area layout
+// from gui.lyt, so the trace records both what arrived and what it resolved to.
+// Without the resolved point, a hover index that never changes cannot be told
+// apart from a message that never arrived.
+func onMouseMove(lParam uintptr) {
+	if gui == nil {
+		return
+	}
+	x := int32(int16(lParam & 0xFFFF))
+	y := int32(int16((lParam >> 16) & 0xFFFF))
+	gui.pointerMoved(point{X: x, Y: y})
+}
+
+func onMouseLeave() {
+	if gui == nil {
+		return
+	}
+	gui.pointerMoved(point{X: -1, Y: -1})
+}
+
+// pointerMoved updates the hover state for the rail, the buttons and the rows,
+// then starts the animation clock if anything changed.
+func (g *guiState) pointerMoved(p point) {
+	now := nowMS()
+	changed := false
+
+	idx := -1
+	if _, ok := g.lyt.railAt(p); ok {
+		for i := range rail.entries {
+			if pointIn(rail.entries[i].item.rect, p) {
+				idx = i
+				break
+			}
+		}
+	}
+	// The hover setter has to be visible in the trace, because the interesting
+	// case is a pointer move that leaves the hover index alone: that is the
+	// common case, and it is the one that must not schedule frames.
+	prevRail, prevBtn, prevRow := rail.hover, btnHoverIndex, hover.index
+
+	if idx != rail.hover {
+		rail.hover = idx
+		for i := range rail.entries {
+			v := 0.0
+			if i == idx {
+				v = 1
+			}
+			rail.entries[i].hover.setTarget(v, hoverDur, now)
+		}
+		changed = true
+	}
+
+	bi := g.lyt.buttonAt(p)
+	if bi != btnHoverIndex {
+		btnHoverIndex = bi
+		for i := range buttonHover {
+			v := 0.0
+			if i == bi {
+				v = 1
+			}
+			buttonHover[i].setTarget(v, hoverDur, now)
+		}
+		changed = true
+	}
+
+	ri := g.lyt.rowAt(p, len(rows.items))
+	if ri != hover.index {
+		hover.index = ri
+		v := 0.0
+		if ri >= 0 {
+			v = 1
+		}
+		hover.row.setTarget(v, hoverDurContent, now)
+		changed = true
+	}
+
+	if animTracing && guiLog != nil && (prevRail != rail.hover || prevBtn != btnHoverIndex || prevRow != hover.index) {
+		fmt.Fprintf(guiLog, "hover moved to (%d,%d): rail %d->%d btn %d->%d row %d->%d\n",
+			p.X, p.Y, prevRail, rail.hover, prevBtn, btnHoverIndex, prevRow, hover.index)
+	}
+	// The window's own geometry is printed on the first traced move, so a
+	// coordinate mismatch between what was sent and what the window resolved
+	// shows up in the same file as the events.
+	if animTracing && guiLog != nil && !traceRectLogged {
+		traceRectLogged = true
+		r := gui.lyt
+		fmt.Fprintf(guiLog, "layout rail=(%d,%d)-(%d,%d) body=(%d,%d)-(%d,%d) table=(%d,%d)-(%d,%d) items=%d\n",
+			r.rail.Left, r.rail.Top, r.rail.Right, r.rail.Bottom,
+			r.body.Left, r.body.Top, r.body.Right, r.body.Bottom,
+			r.table.Left, r.table.Top, r.table.Right, r.table.Bottom,
+			len(r.items))
+		for i := range r.items {
+			it := &r.items[i]
+			fmt.Fprintf(guiLog, "  item %-10q (%d,%d)-(%d,%d)\n",
+				it.label, it.rect.Left, it.rect.Top, it.rect.Right, it.rect.Bottom)
+		}
+	}
+
+	g.wake(changed)
+}
+
+var traceRectLogged bool
+
+// wake starts the animation clock if any relevant element is still moving.
+func (g *guiState) wake(changed bool) {
+	if !changed {
+		return
+	}
+	elems := railElems()
+	elems = append(elems, rowElems()...)
+	elems = append(elems, counterElems()...)
+	for i := range buttonHover {
+		elems = append(elems, &buttonHover[i])
+	}
+	anim.attach(g.hwnd, elems...)
+}
+
+func onMouseDown(lParam uintptr) {
+	if gui == nil {
+		return
+	}
+	p := point{X: int32(int16(lParam & 0xFFFF)), Y: int32(int16((lParam >> 16) & 0xFFFF))}
+
+	// Repaint on press so the click has immediate feedback, and keep the
+	// message flowing to learn about the release.
+	if _, ok := gui.lyt.railAt(p); ok {
+		railPress = true
+		paint()
+	}
+	// A click on a row selects it.
+	if ri := gui.lyt.rowAt(p, len(rows.items)); ri >= 0 && ri < len(rows.items) {
+		gui.selected = rows.items[ri].ref
+		paint()
+	}
+	pSetCapture.Call(gui.hwnd)
+}
+
+var railPress bool
+
+func onMouseUp(lParam uintptr) {
+	if gui == nil {
+		return
+	}
+	pReleaseCapture.Call()
+	railPress = false
+
+	p := point{X: int32(int16(lParam & 0xFFFF)), Y: int32(int16((lParam >> 16) & 0xFFFF))}
+
+	// Release outside the window must not fire the command; the press has to
+	// have started on the same control.
+	if it, ok := gui.lyt.railAt(p); ok {
+		dbg("rail click %q", it.label)
+		// Only Ports is wired up; the others are the shape of the window.
+		if it.id == idRailKeys {
+			openKeyPanel()
+		}
+		return
+	}
+	switch bi := gui.lyt.buttonAt(p); bi {
+	case 0:
+		openLogFolder()
+	case 1:
+		copyAttachCommand()
+	case 2:
+		openKeyPanel()
+	case 3:
+		refresh()
+		gui.flash("refreshed", 4*time.Second)
+	}
+	paint()
+}
+
+// --- data ------------------------------------------------------------------
+
+// refresh pulls the port table and reconciles the painted rows.
 //
-// This is where the list stops being plain text: green for a live port, red for
-// one that is gone, amber for one somebody else is holding. Those three are the
-// questions an operator actually asks when glancing at the window.
-//
-// The three-stage dance is not optional. In a report ListView the CDDS_ITEMPREPAINT
-// callback is per *row*, and iSubItem is always zero there — colouring from it
-// would tint the whole row and could never reach the state column. Per-cell
-// colouring only happens after asking for subitem callbacks, which is what
-// returning CDRF_NOTIFYSUBITEMDRAW from the item stage does.
-func onNotify(lParam uintptr) uintptr {
-	hdr := (*nmhdr)(uptrToPtr(lParam))
-	if hdr.HwndFrom != gui.list || hdr.Code != nmCustomDraw {
-		return 0
-	}
-
-	cd := (*nmlvCustomDraw)(uptrToPtr(lParam))
-	switch cd.Nmcd.DwDrawStage {
-	case cddsPrePaint:
-		return cdrfNotifyItemDraw
-
-	case cddsItemPrePaint:
-		return cdrfNotifySubItemDraw
-
-	case cddsSubItemPrePaint:
-		row := int(int32(cd.Nmcd.DwItemSpec))
-		if row < 0 || row >= len(gui.snapshot) {
-			return cdrfDoDefault
-		}
-		if color, ok := stateColor(gui.snapshot[row], int(cd.ISubItem)); ok {
-			cd.ClrText = color
-		}
-		return cdrfNewFont
-	}
-	return cdrfDoDefault
-}
-
-func stateColor(p proto.PortInfo, col int) (uint32, bool) {
-	switch col {
-	case colState:
-		if p.Online {
-			return colOnline, true
-		}
-		return colOffline, true
-	case colOwner:
-		if p.Owner != "" {
-			return colBusy, true
-		}
-	}
-	return 0, false
-}
-
-// refresh reconciles the list with the daemon's port table.
-//
-// Rebuilding the rows on every tick would clear the operator's selection once a
-// second, which makes "select a port, copy its attach command" unusable. So the
-// list is only rebuilt when the set of ports actually changes; otherwise the
-// cells are updated in place and the selection survives.
+// It repaints only when something actually changed. The timer fires once a
+// second whether or not anything moved, and a full repaint of the window on
+// every tick is a percent of a core doing nothing — measurable on a laptop, and
+// pointless on a window whose contents are identical to the last frame.
 func refresh() {
-	if gui == nil || gui.list == 0 {
+	if gui == nil || gui.hwnd == 0 {
 		return
 	}
 
 	ports := gui.manager.Ports()
-	refs := make([]string, len(ports))
-	for i, p := range ports {
-		refs[i] = p.Ref
+	changed := !samePorts(gui.ports, ports)
+	gui.ports = ports
+
+	now := nowMS()
+	if syncRows(ports, now) {
+		changed = true
 	}
 
-	if !sameRefs(refs, gui.rows) {
-		pSendMessageW.Call(gui.list, lvmSetRedraw, 0, 0)
-		pSendMessageW.Call(gui.list, lvmDeleteAllItems, 0, 0)
-		for i := range ports {
-			item := lvItem{Mask: lvifText, IItem: int32(i), ISubItem: 0}
-			item.PszText = utf16Ptr(ports[i].Ref)
-			pSendMessageW.Call(gui.list, lvmInsertItemW, 0, uintptr(unsafe.Pointer(&item)))
-		}
-		pSendMessageW.Call(gui.list, lvmSetRedraw, 1, 0)
-		gui.rows = refs
-	}
-	gui.snapshot = ports
-
-	for i := range ports {
-		for col := range columns {
-			item := lvItem{Mask: lvifText, IItem: int32(i), ISubItem: int32(col)}
-			item.PszText = utf16Ptr(cell(ports[i], col))
-			pSendMessageW.Call(gui.list, lvmSetItemW, 0, uintptr(unsafe.Pointer(&item)))
-		}
+	online, _, _ := tally(ports)
+	footer := railFooterFor(version.Short(), len(ports), online, loggedSummary(ports))
+	if footer != railFooterText {
+		setRailFooter(footer)
+		changed = true
 	}
 
-	online, held, observing := 0, 0, 0
-	for _, p := range ports {
-		if p.Online {
-			online++
-		}
-		if p.Owner != "" {
-			held++
-		}
-		observing += p.Observers
-	}
-
-	summary := fmt.Sprintf("%s · %d ports · %d online · %d writable · %d observing",
-		version.Full(), len(ports), online, held, observing)
-	if len(ports) == 0 {
-		summary = version.Full() + " · capturing · no serial ports found"
-	}
-	setText(gui.subtitle, summary)
-
-	if gui.flash != "" && time.Now().Before(gui.flashUntil) {
-		setText(gui.status, gui.flash)
-	} else {
-		gui.flash = ""
-		setText(gui.status, gui.sock)
+	// The clock is only started when an animation is actually pending. The
+	// flash message counts as one, because it has to appear and then go away.
+	if changed || gui.flashActive() {
+		gui.wake(true)
+		paint()
 	}
 }
 
-// flash shows a transient message in the status line.
-func flash(msg string) {
-	gui.flash = msg
-	gui.flashUntil = time.Now().Add(6 * time.Second)
-	setText(gui.status, msg)
+// samePorts reports whether two snapshots describe the same ports with the
+// same values. It compares the fields the table actually draws, so a change to
+// something invisible does not trigger a repaint.
+func samePorts(a, b []proto.PortInfo) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Ref != b[i].Ref || a[i].Online != b[i].Online ||
+			a[i].Owner != b[i].Owner || a[i].Observers != b[i].Observers ||
+			a[i].LastErr != b[i].LastErr || a[i].Log != b[i].Log ||
+			a[i].Dev != b[i].Dev || a[i].Baud != b[i].Baud {
+			return false
+		}
+	}
+	return true
 }
 
-func cell(p proto.PortInfo, col int) string {
-	switch col {
-	case colRef:
-		return p.Ref
-	case colState:
-		if p.Online {
-			return "online"
-		}
-		return "offline"
-	case colOwner:
-		return orDash(p.Owner)
-	case colDev:
-		return p.Dev
-	case colBaud:
-		return fmt.Sprintf("%d", p.Baud)
-	case colObs:
-		if p.Observers > 0 {
-			return fmt.Sprintf("%d", p.Observers)
-		}
-		return "-"
-	case colLog:
-		return orDash(p.Log)
-	case colErr:
-		return orDash(p.LastErr)
+// loggedSummary is the third line of the rail footer.
+func loggedSummary(ports []proto.PortInfo) string {
+	if gui != nil && gui.logDir != "" {
+		return "logging to disk"
 	}
+	return "not logging"
+}
+
+// flashActive reports whether a transient message is currently on screen, or
+// has just expired and needs one more frame to be cleared.
+func (g *guiState) flashActive() bool {
+	return g.flashMsg != ""
+}
+
+func (g *guiState) flashText() string {
+	if g.flashMsg != "" && time.Now().Before(g.flashUntil) {
+		return g.flashMsg
+	}
+	g.flashMsg = ""
 	return ""
 }
 
-func onCommand(id uint16) {
-	switch id {
-	case idOpenLogs:
-		if err := os.MkdirAll(gui.logDir, 0o700); err != nil {
-			messageBox(appTitle, fmt.Sprintf("Cannot create %s:\n%v", gui.logDir, err), mbOK|mbIconError)
-			return
-		}
-		if err := shellOpen(gui.logDir); err != nil {
-			messageBox(appTitle, err.Error(), mbOK|mbIconError)
-			return
-		}
-		flash("opened " + gui.logDir)
+func (g *guiState) flash(msg string, d time.Duration) {
+	g.flashMsg = msg
+	g.flashUntil = time.Now().Add(d)
+}
 
-	case idCopyCmd:
-		cmd, ok := attachCommand()
-		if !ok {
-			messageBox(appTitle, "Select a port in the list first.", mbOK|mbIconInformation)
-			return
-		}
-		if err := setClipboardText(cmd); err != nil {
-			messageBox(appTitle, err.Error(), mbOK|mbIconError)
-			return
-		}
-		flash("copied: " + cmd)
+// --- commands --------------------------------------------------------------
 
-	case idKeys:
-		openKeyPanel()
-
-	case idRefresh:
-		refresh()
-		flash("refreshed")
+func openLogFolder() {
+	if err := os.MkdirAll(gui.logDir, 0o700); err != nil {
+		messageBox(appTitle, fmt.Sprintf("Cannot create %s:\n%v", gui.logDir, err), mbOK|mbIconError)
+		return
 	}
+	if err := shellOpen(gui.logDir); err != nil {
+		messageBox(appTitle, err.Error(), mbOK|mbIconError)
+		return
+	}
+	gui.flash("opened "+gui.logDir, 6*time.Second)
+}
+
+func copyAttachCommand() {
+	cmd, ok := attachCommand()
+	if !ok {
+		messageBox(appTitle, "Select a port in the table first.", mbOK|mbIconInformation)
+		return
+	}
+	if err := setClipboardText(cmd); err != nil {
+		messageBox(appTitle, err.Error(), mbOK|mbIconError)
+		return
+	}
+	gui.flash("copied: "+cmd, 8*time.Second)
 }
 
 // attachCommand builds the line the operator would run on their own machine,
 // which is the single most useful thing this window can hand over.
 func attachCommand() (string, bool) {
-	idx, _, _ := pSendMessageW.Call(gui.list, lvmGetNextItem, ^uintptr(0), lvniSelected)
-	i := int(int32(idx))
-	if i < 0 || i >= len(gui.rows) {
+	if gui.selected == "" {
 		return "", false
 	}
-
 	user := firstNonEmpty(os.Getenv("USERNAME"), os.Getenv("USER"))
 	host, _ := os.Hostname()
-	return fmt.Sprintf("sercon attach -t %s@%s %s", user, host, shellQuote(gui.rows[i])), true
+	return fmt.Sprintf("sercon attach -t %s@%s %s", user, host, shellQuote(gui.selected)), true
 }
 
 func confirmExit() bool {
@@ -725,17 +823,11 @@ func shutdown() {
 	})
 }
 
-func sameRefs(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
+// versionText is the footer's right-hand label.
+func versionText() string { return version.Short() }
+
+// rowIsSelected reports whether a row is the operator's current selection.
+func rowIsSelected(ref string) bool { return gui != nil && gui.selected == ref }
 
 func orDash(s string) string {
 	if s == "" {

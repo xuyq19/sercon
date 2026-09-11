@@ -32,56 +32,92 @@ var (
 	gdi32    = syscall.NewLazyDLL("gdi32.dll")
 	comctl32 = syscall.NewLazyDLL("comctl32.dll")
 	shell32  = syscall.NewLazyDLL("shell32.dll")
+	uxtheme  = syscall.NewLazyDLL("uxtheme.dll")
 )
 
 var (
-	pRegisterClassExW     = user32.NewProc("RegisterClassExW")
-	pCreateWindowExW      = user32.NewProc("CreateWindowExW")
-	pDefWindowProcW       = user32.NewProc("DefWindowProcW")
-	pGetMessageW          = user32.NewProc("GetMessageW")
-	pTranslateMessage     = user32.NewProc("TranslateMessage")
-	pDispatchMessageW     = user32.NewProc("DispatchMessageW")
-	pPostQuitMessage      = user32.NewProc("PostQuitMessage")
-	pPostMessageW         = user32.NewProc("PostMessageW")
-	pDestroyWindow        = user32.NewProc("DestroyWindow")
-	pShowWindow           = user32.NewProc("ShowWindow")
-	pUpdateWindow         = user32.NewProc("UpdateWindow")
-	pGetClientRect        = user32.NewProc("GetClientRect")
-	pSendMessageW         = user32.NewProc("SendMessageW")
-	pSetWindowTextW       = user32.NewProc("SetWindowTextW")
-	pLoadCursorW          = user32.NewProc("LoadCursorW")
-	pMessageBoxW          = user32.NewProc("MessageBoxW")
-	pSetProcessDPIAware   = user32.NewProc("SetProcessDPIAware")
-	pMoveWindow           = user32.NewProc("MoveWindow")
-	pSetTimer             = user32.NewProc("SetTimer")
-	pSetForegroundWindow  = user32.NewProc("SetForegroundWindow")
-	pOpenClipboard        = user32.NewProc("OpenClipboard")
-	pEmptyClipboard       = user32.NewProc("EmptyClipboard")
-	pSetClipboardData     = user32.NewProc("SetClipboardData")
-	pCloseClipboard       = user32.NewProc("CloseClipboard")
-	pGetDC                = user32.NewProc("GetDC")
-	pReleaseDC            = user32.NewProc("ReleaseDC")
-	pEnableWindow         = user32.NewProc("EnableWindow")
-	pGetWindowTextW       = user32.NewProc("GetWindowTextW")
-	pGetWindowTextLengthW = user32.NewProc("GetWindowTextLengthW")
-	pSetFocus             = user32.NewProc("SetFocus")
-	pGetDlgCtrlID         = user32.NewProc("GetDlgCtrlID")
+	pRegisterClassExW      = user32.NewProc("RegisterClassExW")
+	pCreateWindowExW       = user32.NewProc("CreateWindowExW")
+	pDefWindowProcW        = user32.NewProc("DefWindowProcW")
+	pGetMessageW           = user32.NewProc("GetMessageW")
+	pTranslateMessage      = user32.NewProc("TranslateMessage")
+	pDispatchMessageW      = user32.NewProc("DispatchMessageW")
+	pPostQuitMessage       = user32.NewProc("PostQuitMessage")
+	pPostMessageW          = user32.NewProc("PostMessageW")
+	pDestroyWindow         = user32.NewProc("DestroyWindow")
+	pShowWindow            = user32.NewProc("ShowWindow")
+	pUpdateWindow          = user32.NewProc("UpdateWindow")
+	pGetClientRect         = user32.NewProc("GetClientRect")
+	pSendMessageW          = user32.NewProc("SendMessageW")
+	pSetWindowTextW        = user32.NewProc("SetWindowTextW")
+	pLoadCursorW           = user32.NewProc("LoadCursorW")
+	pMessageBoxW           = user32.NewProc("MessageBoxW")
+	pSetProcessDPIAware    = user32.NewProc("SetProcessDPIAware")
+	pMoveWindow            = user32.NewProc("MoveWindow")
+	pSetTimer              = user32.NewProc("SetTimer")
+	pKillTimer             = user32.NewProc("KillTimer")
+	pSetForegroundWindow   = user32.NewProc("SetForegroundWindow")
+	pOpenClipboard         = user32.NewProc("OpenClipboard")
+	pEmptyClipboard        = user32.NewProc("EmptyClipboard")
+	pSetClipboardData      = user32.NewProc("SetClipboardData")
+	pCloseClipboard        = user32.NewProc("CloseClipboard")
+	pGetDC                 = user32.NewProc("GetDC")
+	pReleaseDC             = user32.NewProc("ReleaseDC")
+	pEnableWindow          = user32.NewProc("EnableWindow")
+	pGetWindowTextW        = user32.NewProc("GetWindowTextW")
+	pGetWindowTextLengthW  = user32.NewProc("GetWindowTextLengthW")
+	pSetFocus              = user32.NewProc("SetFocus")
+	pGetDlgCtrlID          = user32.NewProc("GetDlgCtrlID")
+	pGetCursorPos          = user32.NewProc("GetCursorPos")
+	pInvalidateRect        = user32.NewProc("InvalidateRect")
+	pTrackMouseEvent       = user32.NewProc("TrackMouseEvent")
+	pSetCapture            = user32.NewProc("SetCapture")
+	pReleaseCapture        = user32.NewProc("ReleaseCapture")
+	pShowCursor            = user32.NewProc("ShowCursor")
+	pSystemParametersInfoW = user32.NewProc("SystemParametersInfoW")
 
 	pGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
 	pGlobalAlloc      = kernel32.NewProc("GlobalAlloc")
 	pGlobalLock       = kernel32.NewProc("GlobalLock")
 	pGlobalUnlock     = kernel32.NewProc("GlobalUnlock")
-	pGetDeviceCaps    = gdi32.NewProc("GetDeviceCaps")
-	pCreateFontW      = gdi32.NewProc("CreateFontW")
-	pGetStockObject   = gdi32.NewProc("GetStockObject")
-	pSetTextColor     = gdi32.NewProc("SetTextColor")
-	pSetBkMode        = gdi32.NewProc("SetBkMode")
-	pCreateSolidBrush = gdi32.NewProc("CreateSolidBrush")
+	pGetTickCount64   = kernel32.NewProc("GetTickCount64")
+
+	pGetDeviceCaps          = gdi32.NewProc("GetDeviceCaps")
+	pCreateFontW            = gdi32.NewProc("CreateFontW")
+	pGetStockObject         = gdi32.NewProc("GetStockObject")
+	pSetTextColor           = gdi32.NewProc("SetTextColor")
+	pSetBkMode              = gdi32.NewProc("SetBkMode")
+	pCreateSolidBrush       = gdi32.NewProc("CreateSolidBrush")
+	pDeleteObject           = gdi32.NewProc("DeleteObject")
+	pSelectObject           = gdi32.NewProc("SelectObject")
+	pCreateCompatibleDC     = gdi32.NewProc("CreateCompatibleDC")
+	pCreateCompatibleBitmap = gdi32.NewProc("CreateCompatibleBitmap")
+	pBitBlt                 = gdi32.NewProc("BitBlt")
+	pDeleteDC               = gdi32.NewProc("DeleteDC")
+	pFillRect               = user32.NewProc("FillRect")
+	pCreatePen              = gdi32.NewProc("CreatePen")
+	pMoveToEx               = gdi32.NewProc("MoveToEx")
+	pLineTo                 = gdi32.NewProc("LineTo")
+	pRoundRect              = gdi32.NewProc("RoundRect")
+	pGetTextExtentPoint32W  = gdi32.NewProc("GetTextExtentPoint32W")
+	pSetTextAlign           = gdi32.NewProc("SetTextAlign")
+	pTextOutW               = gdi32.NewProc("TextOutW")
+	pIntersectClipRect      = gdi32.NewProc("IntersectClipRect")
+	pSelectClipRgn          = gdi32.NewProc("SelectClipRgn")
+
+	pScreenToClient = user32.NewProc("ScreenToClient")
+	pBeginPaint     = user32.NewProc("BeginPaint")
+	pEndPaint       = user32.NewProc("EndPaint")
 
 	pImageListCreate = comctl32.NewProc("ImageList_Create")
 
 	pInitCommonControlsEx = comctl32.NewProc("InitCommonControlsEx")
 	pShellExecuteW        = shell32.NewProc("ShellExecuteW")
+
+	// SetWindowTheme with an empty theme name turns off the visual style for a
+	// single control. The ListView is drawn by hand, and the themed version
+	// paints its own background and header on top of that.
+	pSetWindowTheme = uxtheme.NewProc("SetWindowTheme")
 )
 
 // Window styles and messages.
@@ -131,18 +167,39 @@ const (
 	wmCreate         = 0x0001
 	wmDestroy        = 0x0002
 	wmSize           = 0x0005
+	wmPaint          = 0x000F
 	wmClose          = 0x0010
+	wmEraseBkgnd     = 0x0014
+	wmSetCursor      = 0x0020
+	wmGetMinMaxInfo  = 0x0024
 	wmSetFont        = 0x0030
+	wmMouseMove      = 0x0200
+	wmLButtonDown    = 0x0201
+	wmLButtonUp      = 0x0202
+	wmMouseLeave     = 0x02A3
 	wmNotify         = 0x004E
 	wmCommand        = 0x0111
 	wmTimer          = 0x0113
-	wmGetMinMaxInfo  = 0x0024
 	wmCtlColorStatic = 0x0138
+
+	// idcHand is the hand cursor, used over anything clickable.
+	idcHand = 32649
 
 	transparent = 1
 
 	lognPixelY = 90
 )
+
+// paintStruct mirrors PAINTSTRUCT, which BeginPaint fills in. The field widths
+// matter: the struct is written by the OS and read by nothing here.
+type paintStruct struct {
+	Hdc         uintptr
+	FErase      int32
+	RcPaint     rect
+	FRestore    int32
+	FIncUpdate  int32
+	RgbReserved [32]byte
+}
 
 // Common controls.
 const (
@@ -573,7 +630,7 @@ func messageBox(title, text string, flags uintptr) int {
 	return int(r)
 }
 
-func createFont(pt int, weight uintptr) uintptr {
+func createFont(face string, pt int, weight uintptr) uintptr {
 	hdc, _, _ := pGetDC.Call(0)
 	defer pReleaseDC.Call(0, hdc)
 
@@ -587,22 +644,14 @@ func createFont(pt int, weight uintptr) uintptr {
 	// many small tools look soft on a laptop panel.
 	height := -int32(pt*int(dpi)) / 72
 
-	face := utf16Ptr("Segoe UI")
 	r, _, _ := pCreateFontW.Call(
 		uintptr(height), 0, 0, 0,
 		weight, 0, 0, 0,
 		ansiCharset, defaultPitch,
-		uintptr(unsafe.Pointer(face)),
+		uintptr(unsafe.Pointer(utf16Ptr(face))),
 	)
 	return r
 }
-
-// createUIFont is the body font used by the list, buttons and status line.
-func createUIFont() uintptr { return createFont(9, fwNormal) }
-
-// createHeadingFont is used for the one line of hierarchy at the top of the
-// window, which is what keeps it from reading as a wall of controls.
-func createHeadingFont() uintptr { return createFont(12, fwSemibold) }
 
 // solidBrush creates a GDI brush. The caller owns it and should delete it, but
 // these are created once per window and live as long as the process does, so
@@ -694,4 +743,386 @@ func setClipboardText(s string) error {
 		return fmt.Errorf("clipboard: SetClipboardData: %v", errno)
 	}
 	return nil
+}
+
+// --- drawing primitives ---------------------------------------------------
+
+// The custom-painted half of the window needs a handful of GDI calls that a
+// stock control would have made internally. They are wrapped here rather than
+// called at each site so the argument marshalling stays in one place.
+
+// hbrush is a GDI brush handle. The zero value is not a valid handle, which
+// makes "not created yet" the same thing as "not set".
+type hbrush uintptr
+
+// solidBrushFrom creates a brush in a given colour.
+//
+// These are cached by colour for the life of the process. A repaint allocates
+// none: the sidebar alone would otherwise create and destroy half a dozen
+// brushes per frame, and at 60 frames a second that is the difference between
+// a window that idles at 0% CPU and one that never settles.
+var (
+	brushCache = map[uint32]hbrush{}
+)
+
+func brush(color uint32) hbrush {
+	if b, ok := brushCache[color]; ok {
+		return b
+	}
+	r, _, _ := pCreateSolidBrush.Call(uintptr(color))
+	b := hbrush(r)
+	brushCache[color] = b
+	return b
+}
+
+// penCache holds the one-pixel pens used for hairlines and outlines. Width 1
+// is PS_SOLID with a width of 1; a wider pen is created on demand.
+const psSolid = 0
+
+func pen(color uint32) uintptr {
+	r, _, _ := pCreatePen.Call(psSolid, 1, uintptr(color))
+	return r
+}
+
+// fillRect paints a solid rectangle.
+//
+// FillRect takes a RECT by pointer and, unlike most GDI calls, does not need
+// the brush selected into a DC first — which makes it both cheaper and less
+// error-prone than SetBkColor plus ExtTextOut for a background block.
+func fillRect(hdc uintptr, r rect, color uint32) {
+	pFillRect.Call(hdc, uintptr(unsafe.Pointer(&r)), uintptr(brush(color)))
+}
+
+// clipGuard restricts drawing to a rectangle for the duration of a paint pass.
+//
+// GDI has no scoped clip, so it is established by intersecting with the current
+// region and undone by selecting the whole window back. The type exists so the
+// restore cannot be forgotten: a clip left installed would silently swallow
+// every later draw in the frame.
+type clipGuard struct {
+	hdc uintptr
+}
+
+// clipTo bounds subsequent drawing to r.
+func clipTo(hdc uintptr, r rect) clipGuard {
+	pIntersectClipRect.Call(hdc, uintptr(r.Left), uintptr(r.Top),
+		uintptr(r.Right), uintptr(r.Bottom))
+	return clipGuard{hdc: hdc}
+}
+
+// release restores the unrestricted clip region.
+func (c clipGuard) release() {
+	// A null region selects the whole window back, which is what the DC had
+	// before. Passing a specific rect instead would leave the outer area
+	// clipped for the rest of the frame.
+	pSelectClipRgn.Call(c.hdc, 0)
+}
+
+// strokeRect draws a one-pixel outline, inset by half a pixel so the line
+// lands inside the rect rather than straddling its edge.
+func strokeRect(hdc uintptr, r rect, color uint32) {
+	p := pen(color)
+	old, _, _ := pSelectObject.Call(hdc, p)
+	defer func() {
+		pSelectObject.Call(hdc, old)
+		pDeleteObject.Call(p)
+	}()
+
+	// Left and right edges, then top and bottom. The bottom and right are one
+	// pixel inside so that adjacent boxes share an edge instead of doubling it.
+	pMoveToEx.Call(hdc, uintptr(r.Left), uintptr(r.Top), 0)
+	pLineTo.Call(hdc, uintptr(r.Right-1), uintptr(r.Top))
+	pLineTo.Call(hdc, uintptr(r.Right-1), uintptr(r.Bottom-1))
+	pLineTo.Call(hdc, uintptr(r.Left), uintptr(r.Bottom-1))
+	pLineTo.Call(hdc, uintptr(r.Left), uintptr(r.Top))
+}
+
+// hLine draws a horizontal hairline at y across [x0, x1).
+func hLine(hdc uintptr, x0, x1, y int32, color uint32) {
+	p := pen(color)
+	old, _, _ := pSelectObject.Call(hdc, p)
+	pMoveToEx.Call(hdc, uintptr(x0), uintptr(y), 0)
+	pLineTo.Call(hdc, uintptr(x1), uintptr(y))
+	pSelectObject.Call(hdc, old)
+	pDeleteObject.Call(p)
+}
+
+// vLine draws a vertical hairline at x across [y0, y1).
+func vLine(hdc uintptr, x, y0, y1 int32, color uint32) {
+	p := pen(color)
+	old, _, _ := pSelectObject.Call(hdc, p)
+	pMoveToEx.Call(hdc, uintptr(x), uintptr(y0), 0)
+	pLineTo.Call(hdc, uintptr(x), uintptr(y1))
+	pSelectObject.Call(hdc, old)
+	pDeleteObject.Call(p)
+}
+
+// roundRectFilled paints a rounded rectangle, optionally outlined.
+//
+// RoundRect draws its border with the current pen and fills with the current
+// brush in one pass, so a capsule costs one call rather than a path. Passing a
+// null brush would leave it unfilled; passing a null pen would leave the
+// outline undrawn, so both are always supplied.
+func roundRectFilled(hdc uintptr, r rect, radius int32, fill, outline uint32) {
+	fb := brush(fill)
+	var p uintptr
+	if outline != 0 {
+		p = pen(outline)
+	} else {
+		p, _, _ = pGetStockObject.Call(nullPen)
+	}
+
+	oldB, _, _ := pSelectObject.Call(hdc, uintptr(fb))
+	oldP, _, _ := pSelectObject.Call(hdc, p)
+
+	pRoundRect.Call(hdc,
+		uintptr(r.Left), uintptr(r.Top), uintptr(r.Right), uintptr(r.Bottom),
+		uintptr(radius), uintptr(radius))
+
+	pSelectObject.Call(hdc, oldB)
+	pSelectObject.Call(hdc, oldP)
+	if outline != 0 {
+		pDeleteObject.Call(p)
+	}
+}
+
+// textAt draws a single line of text at (x, y), which is the top-left of the
+// text box rather than its baseline.
+func textAt(hdc uintptr, x, y int32, s string, color uint32) {
+	if s == "" {
+		return
+	}
+	pSetTextColor.Call(hdc, uintptr(color))
+	pTextOutW.Call(hdc, uintptr(x), uintptr(y),
+		uintptr(unsafe.Pointer(utf16Ptr(s))), uintptr(len([]rune(s))))
+}
+
+// textWidth measures a string in the currently selected font.
+//
+// The column layout is computed from measured text rather than from character
+// counts, because Segoe UI is proportional — counting characters would push
+// the last column off the edge on any string with wide glyphs in it.
+func textWidth(hdc uintptr, s string) int32 {
+	if s == "" {
+		return 0
+	}
+	var sz size
+	u := utf16Ptr(s)
+	n := len([]rune(s))
+	pGetTextExtentPoint32W.Call(hdc,
+		uintptr(unsafe.Pointer(u)), uintptr(n),
+		uintptr(unsafe.Pointer(&sz)))
+	return sz.CX
+}
+
+// textRight draws text right-aligned so that its right edge lands on x.
+func textRight(hdc uintptr, x, y int32, s string, color uint32) {
+	w := textWidth(hdc, s)
+	textAt(hdc, x-w, y, s, color)
+}
+
+// --- off-screen compositing ------------------------------------------------
+
+// surface is a memory DC holding one window's worth of pixels.
+//
+// Every repaint goes through one of these and is blitted to the screen in a
+// single BitBlt. Drawing straight to the window DC is the reason hand-painted
+// Win32 windows flicker: the user sees the background painted, then the rail,
+// then each row, one after another. Compositing off-screen costs one extra
+// bitmap and removes the entire class of problem.
+type surface struct {
+	dc     uintptr
+	bitmap uintptr
+	width  int32
+	height int32
+	valid  bool
+}
+
+// ensure makes the surface large enough for the given client area, reallocating
+// only when the window has actually grown. Reallocating every frame would be
+// far more expensive than the drawing it saves.
+func (s *surface) ensure(hwnd uintptr, w, h int32) bool {
+	if w <= 0 || h <= 0 {
+		return false
+	}
+	if s.valid && s.width >= w && s.height >= h {
+		return true
+	}
+	s.release()
+
+	dc, _, _ := pGetDC.Call(hwnd)
+	compat, _, _ := pCreateCompatibleDC.Call(dc)
+	bmp, _, _ := pCreateCompatibleBitmap.Call(dc, uintptr(w), uintptr(h))
+	pReleaseDC.Call(hwnd, dc)
+
+	if compat == 0 || bmp == 0 {
+		if compat != 0 {
+			pDeleteDC.Call(compat)
+		}
+		if bmp != 0 {
+			pDeleteObject.Call(bmp)
+		}
+		return false
+	}
+
+	pSelectObject.Call(compat, bmp)
+	s.dc = compat
+	s.bitmap = bmp
+	s.width = w
+	s.height = h
+	s.valid = true
+	return true
+}
+
+func (s *surface) release() {
+	if !s.valid {
+		return
+	}
+	pDeleteDC.Call(s.dc)
+	pDeleteObject.Call(s.bitmap)
+	s.dc, s.bitmap = 0, 0
+	s.valid = false
+}
+
+// flush copies the composed image to the window.
+func (s *surface) flush(hwnd uintptr) {
+	dc, _, _ := pGetDC.Call(hwnd)
+	pBitBlt.Call(dc, 0, 0, uintptr(s.width), uintptr(s.height),
+		s.dc, 0, 0, srccopy)
+	pReleaseDC.Call(hwnd, dc)
+}
+
+// srccopy is the ROP code for "copy source to destination" in BitBlt.
+const srccopy = 0x00CC0020
+
+// nullPen and nullBrush are the stock-object indices used to suppress part of
+// a drawing operation.
+const (
+	nullPen        = 8
+	emptyBrush     = 5
+	dcBrush        = 18
+	dcPen          = 19
+	defaultCharset = 1
+)
+
+// size mirrors the SIZE struct GetTextExtentPoint32W fills in.
+type size struct{ CX, CY int32 }
+
+// --- animation timing -----------------------------------------------------
+
+// nowMS is the monotonic clock the animation code runs on.
+//
+// time.Now() would work, but every animation frame asks for the time and this
+// is the cheaper call. Wall-clock time is the wrong source anyway: an NTP
+// correction mid-animation would make an eased value jump.
+func nowMS() int64 {
+	r, _, _ := pGetTickCount64.Call()
+	return int64(r)
+}
+
+// easeOutCubic maps 0..1 to 0..1 with a decelerating curve.
+func easeOutCubic(t float64) float64 {
+	u := 1 - t
+	return 1 - u*u*u
+}
+
+// clamp01 bounds a progress value.
+func clamp01(t float64) float64 {
+	if t < 0 {
+		return 0
+	}
+	if t > 1 {
+		return 1
+	}
+	return t
+}
+
+// lerp blends two colours by t, 0 giving a and 1 giving b.
+//
+// Blending in COLORREF's 0x00BBGGRR layout works channel by channel with the
+// same shifts regardless of channel order, which is why this does not have to
+// unpack and repack.
+func lerp(a, b uint32, t float64) uint32 {
+	if t <= 0 {
+		return a
+	}
+	if t >= 1 {
+		return b
+	}
+	ar, ag, ab := a&0xFF, (a>>8)&0xFF, (a>>16)&0xFF
+	br, bg, bb := b&0xFF, (b>>8)&0xFF, (b>>16)&0xFF
+	r := uint32(float64(ar) + (float64(br)-float64(ar))*t)
+	g := uint32(float64(ag) + (float64(bg)-float64(ag))*t)
+	bl := uint32(float64(ab) + (float64(bb)-float64(ab))*t)
+	return r | g<<8 | bl<<16
+}
+
+// --- animation diagnostics ------------------------------------------------
+
+// animTracing turns on a per-frame dump of every animated value. It is off by
+// default and costs nothing when off.
+//
+// The numbers it prints are read from the same tween values the painter reads,
+// which is the only way to tell "the animation is running but the screenshot
+// caught it settled" apart from "the animation never ran" without watching the
+// window, and a scripted capture has no way to watch the window.
+var animTracing = os.Getenv("SERCON_ANIM_TRACE") != ""
+
+// animTrace counts frames so the dump is bounded and readable.
+var animTraceFrames int
+
+// traceAnim prints one line per frame summarising the animation state.
+func traceAnim(kind string) {
+	if !animTracing || guiLog == nil {
+		return
+	}
+	if animTraceFrames++; animTraceFrames > 400 {
+		return
+	}
+	var b []byte
+	b = append(b, kind...)
+	for i := range rail.entries {
+		e := &rail.entries[i]
+		b = fmt.Appendf(b, " %s[h=%.2f s=%.2f]", e.item.label, e.hover.value, e.sel.value)
+	}
+	b = fmt.Appendf(b, " hover(r=%.2f i=%d)", hover.row.value, hover.index)
+	for i := range rows.items {
+		r := &rows.items[i]
+		b = fmt.Appendf(b, " row(%s %.2f h=%d dying=%v)", r.ref, r.t.value, r.height(), r.dying)
+	}
+	for i := range counters {
+		b = fmt.Appendf(b, " c%d=%.1f", i, counters[i].value)
+	}
+	for i := range buttonHover {
+		b = fmt.Appendf(b, " b%d=%.2f", i, buttonHover[i].value)
+	}
+	fmt.Fprintf(guiLog, "%s\n", b)
+}
+
+// cursorPos reports the cursor in client coordinates of the given window.
+func cursorPos(hwnd uintptr) (point, bool) {
+	var p point
+	if r, _, _ := pGetCursorPos.Call(uintptr(unsafe.Pointer(&p))); r == 0 {
+		return point{}, false
+	}
+	// ClientToScreen is inverted by translating with ScreenToClient; the
+	// deprecated GetMessagePos approach returns screen coordinates and would
+	// need the same conversion.
+	pScreenToClient.Call(hwnd, uintptr(unsafe.Pointer(&p)))
+	return p, true
+}
+
+// pointIn reports whether a point lies inside a rect.
+func pointIn(r rect, p point) bool {
+	return p.X >= r.Left && p.X < r.Right && p.Y >= r.Top && p.Y < r.Bottom
+}
+
+// inset shrinks a rect on every side.
+func insetRect(r rect, dx, dy int32) rect {
+	return rect{r.Left + dx, r.Top + dy, r.Right - dx, r.Bottom - dy}
+}
+
+// rectAt builds a rect from an origin and a size.
+func rectAt(x, y, w, h int32) rect {
+	return rect{x, y, x + w, y + h}
 }

@@ -173,17 +173,17 @@ func keyPanelandCreate(hwnd uintptr) {
 
 	kp.pathLabel = createWindow(className("Static"), "…",
 		wsChild|wsVisible, 0, 12, 12, 100, 18, hwnd, idKeyPathLabel)
-	setFont(kp.pathLabel, gui.fontUI)
+	setFont(kp.pathLabel, fonts.body)
 
 	kp.hintLabel = createWindow(className("Static"), "…",
 		wsChild|wsVisible, 0, 12, 32, 100, 32, hwnd, idKeyHintLabel)
-	setFont(kp.hintLabel, gui.fontUI)
+	setFont(kp.hintLabel, fonts.body)
 
 	kp.list = createWindow(className("ListBox"), "",
 		wsChild|wsVisible|wsTabStop|wsBorder|wsVScroll|lbsNotify,
 		wsExClientEdge,
 		12, 70, 100, 120, hwnd, idKeyList)
-	setFont(kp.list, gui.fontUI)
+	setFont(kp.list, fonts.body)
 
 	// A multiline edit rather than a single line: a public key is a long
 	// string and people paste it, often with the trailing newline intact.
@@ -192,12 +192,12 @@ func keyPanelandCreate(hwnd uintptr) {
 			esMultiline|esAutoVScroll|esWantReturn|esNoHideSel,
 		wsExClientEdge,
 		12, 200, 100, 100, hwnd, idKeyInput)
-	setFont(kp.input, gui.fontUI)
+	setFont(kp.input, fonts.body)
 
 	kp.inputHint = createWindow(className("Static"),
 		"Paste the client's public key (the line from id_ed25519.pub or id_rsa.pub):",
 		wsChild|wsVisible, 0, 12, 178, 100, 18, hwnd, idKeyInputHint)
-	setFont(kp.inputHint, gui.fontUI)
+	setFont(kp.inputHint, fonts.body)
 
 	buttons := []struct {
 		label string
@@ -212,7 +212,7 @@ func keyPanelandCreate(hwnd uintptr) {
 		h := createWindow(className("Button"), b.label,
 			wsChild|wsVisible|wsTabStop|bsPushButton,
 			0, 0, 0, 130, 30, hwnd, b.id)
-		setFont(h, gui.fontUI)
+		setFont(h, fonts.body)
 		kp.btns = append(kp.btns, h)
 	}
 
@@ -293,11 +293,11 @@ func keyPanelLayout() {
 func onKeyPanelCtlColor(hdc, control uintptr) uintptr {
 	setBkMode(hdc, transparent)
 	if control == keyWin.hintLabel || control == keyWin.pathLabel {
-		setTextColor(hdc, colMuted)
+		setTextColor(hdc, colTextDim)
 	} else {
 		setTextColor(hdc, colText)
 	}
-	return gui.bgBrush
+	return bgBrush
 }
 
 func keyPanelCommand(id uint16) {
