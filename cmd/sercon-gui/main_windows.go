@@ -93,6 +93,7 @@ type guiState struct {
 	hwnd uintptr
 
 	fontsReady bool
+	dpi        uint32
 
 	// lyt is recomputed on every resize and read by the paint and hit-test
 	// paths. Nothing else computes control positions.
@@ -146,11 +147,13 @@ func dbg(format string, args ...any) {
 }
 
 func main() {
-	// DPI awareness has to be set before any window exists, or Windows scales
-	// the result and the text goes soft.
-	pSetProcessDPIAware.Call()
-
+	// DPI awareness has to be set before any window or GDI object exists.
+	// The manifest requests Per-Monitor V2; this runtime call covers launches
+	// where an external host ignored that manifest.
 	openLog()
+	if err := enablePerMonitorV2(); err != nil {
+		dbg("DPI awareness fallback: %v", err)
+	}
 
 	if err := runGUI(); err != nil {
 		messageBox(appTitle, err.Error(), mbOK|mbIconError)
@@ -362,6 +365,9 @@ func wndProc(hwnd uintptr, m uint32, wParam, lParam uintptr) uintptr {
 	case wmSize:
 		onSize()
 		return 0
+	case wmDpiChanged:
+		onDpiChanged(hwnd, (*rect)(uptrToPtr(lParam)))
+		return 0
 	case wmTimer:
 		onTimer(wParam)
 		return 0
@@ -396,6 +402,7 @@ func wndProc(hwnd uintptr, m uint32, wParam, lParam uintptr) uintptr {
 		dbg("WM_DESTROY")
 		anim.stop()
 		gui.surf.release()
+		fonts.release()
 		shutdown()
 		pPostQuitMessage.Call(0)
 		return 0
@@ -403,8 +410,49 @@ func wndProc(hwnd uintptr, m uint32, wParam, lParam uintptr) uintptr {
 	return defWindowProc(hwnd, m, wParam, lParam)
 }
 
+// enablePerMonitorV2 requests the newest DPI mode. ERROR_ACCESS_DENIED is
+// normal when the application manifest already established the process mode.
+func enablePerMonitorV2() error {
+	result, _, callErr := pSetProcessDpiAwarenessContext.Call(dpiAwarenessContextPerMonitorV2)
+	if result != 0 || callErr == syscall.Errno(5) {
+		return nil
+	}
+	// Windows 7 lacks the newer API. Its system-DPI fallback remains usable.
+	legacy, _, legacyErr := pSetProcessDPIAware.Call()
+	if legacy != 0 {
+		return nil
+	}
+	return fmt.Errorf("cannot enable Per-Monitor V2 (%v); legacy DPI mode also failed (%v)", callErr, legacyErr)
+}
+
+// onDpiChanged adopts Windows' suggested outer rectangle, then recreates all
+// objects whose device-pixel size depends on the destination monitor's DPI.
+func updateFontDPI(hwnd uintptr) uint32 {
+	dpi, _, _ := pGetDpiForWindow.Call(hwnd)
+	if dpi == 0 {
+		return 96
+	}
+	return uint32(dpi)
+}
+
+func onDpiChanged(hwnd uintptr, suggested *rect) {
+	if suggested != nil {
+		setWindowPos(hwnd, *suggested)
+	}
+	fontDPI = updateFontDPI(hwnd)
+	gui.dpi = fontDPI
+	fonts.release()
+	initFonts()
+	gui.fontsReady = true
+	gui.surf.release()
+	onSize()
+	paint()
+}
+
 func onCreate(hwnd uintptr) {
 	gui.hwnd = hwnd
+	fontDPI = updateFontDPI(hwnd)
+	gui.dpi = fontDPI
 
 	initFonts()
 	gui.fontsReady = true

@@ -1,0 +1,4 @@
+// The concrete ICON line is deliberately kept in this source file so the
+// release build can embed the user-supplied icon with CGO disabled. Add the PNG
+// conversion output at assets/sercon-gui.ico, then build with make gui.
+1 ICON "assets\\sercon-gui.ico"

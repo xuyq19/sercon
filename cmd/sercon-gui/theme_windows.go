@@ -98,3 +98,17 @@ func initFonts() {
 	fonts.counterLabel = createFont(faceUI, 8, fwNormal)
 	fonts.footer = createFont(faceUI, 8, fwNormal)
 }
+
+// release deletes fonts before rebuilding them after a monitor-DPI transition
+// or before destroying the main window. Stock brushes remain process-lifetime.
+func (f *fontRoles) release() {
+	for _, handle := range []uintptr{
+		f.rail, f.railCaption, f.railFooter, f.title, f.subtitle, f.body,
+		f.bodyMedium, f.colHead, f.section, f.counter, f.counterLabel, f.footer,
+	} {
+		if handle != 0 {
+			pDeleteObject.Call(handle)
+		}
+	}
+	*f = fontRoles{}
+}

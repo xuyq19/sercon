@@ -34,46 +34,50 @@ var (
 )
 
 var (
-	pRegisterClassExW      = user32.NewProc("RegisterClassExW")
-	pCreateWindowExW       = user32.NewProc("CreateWindowExW")
-	pDefWindowProcW        = user32.NewProc("DefWindowProcW")
-	pGetMessageW           = user32.NewProc("GetMessageW")
-	pTranslateMessage      = user32.NewProc("TranslateMessage")
-	pDispatchMessageW      = user32.NewProc("DispatchMessageW")
-	pPostQuitMessage       = user32.NewProc("PostQuitMessage")
-	pPostMessageW          = user32.NewProc("PostMessageW")
-	pDestroyWindow         = user32.NewProc("DestroyWindow")
-	pShowWindow            = user32.NewProc("ShowWindow")
-	pUpdateWindow          = user32.NewProc("UpdateWindow")
-	pGetClientRect         = user32.NewProc("GetClientRect")
-	pSendMessageW          = user32.NewProc("SendMessageW")
-	pSetWindowTextW        = user32.NewProc("SetWindowTextW")
-	pLoadCursorW           = user32.NewProc("LoadCursorW")
-	pSetCursor             = user32.NewProc("SetCursor")
-	pMessageBoxW           = user32.NewProc("MessageBoxW")
-	pSetProcessDPIAware    = user32.NewProc("SetProcessDPIAware")
-	pMoveWindow            = user32.NewProc("MoveWindow")
-	pSetTimer              = user32.NewProc("SetTimer")
-	pKillTimer             = user32.NewProc("KillTimer")
-	pSetForegroundWindow   = user32.NewProc("SetForegroundWindow")
-	pOpenClipboard         = user32.NewProc("OpenClipboard")
-	pEmptyClipboard        = user32.NewProc("EmptyClipboard")
-	pSetClipboardData      = user32.NewProc("SetClipboardData")
-	pCloseClipboard        = user32.NewProc("CloseClipboard")
-	pGetDC                 = user32.NewProc("GetDC")
-	pReleaseDC             = user32.NewProc("ReleaseDC")
-	pEnableWindow          = user32.NewProc("EnableWindow")
-	pGetWindowTextW        = user32.NewProc("GetWindowTextW")
-	pGetWindowTextLengthW  = user32.NewProc("GetWindowTextLengthW")
-	pSetFocus              = user32.NewProc("SetFocus")
-	pGetDlgCtrlID          = user32.NewProc("GetDlgCtrlID")
-	pGetCursorPos          = user32.NewProc("GetCursorPos")
-	pInvalidateRect        = user32.NewProc("InvalidateRect")
-	pTrackMouseEvent       = user32.NewProc("TrackMouseEvent")
-	pSetCapture            = user32.NewProc("SetCapture")
-	pReleaseCapture        = user32.NewProc("ReleaseCapture")
-	pShowCursor            = user32.NewProc("ShowCursor")
-	pSystemParametersInfoW = user32.NewProc("SystemParametersInfoW")
+	pRegisterClassExW              = user32.NewProc("RegisterClassExW")
+	pCreateWindowExW               = user32.NewProc("CreateWindowExW")
+	pDefWindowProcW                = user32.NewProc("DefWindowProcW")
+	pGetMessageW                   = user32.NewProc("GetMessageW")
+	pTranslateMessage              = user32.NewProc("TranslateMessage")
+	pDispatchMessageW              = user32.NewProc("DispatchMessageW")
+	pPostQuitMessage               = user32.NewProc("PostQuitMessage")
+	pPostMessageW                  = user32.NewProc("PostMessageW")
+	pDestroyWindow                 = user32.NewProc("DestroyWindow")
+	pShowWindow                    = user32.NewProc("ShowWindow")
+	pUpdateWindow                  = user32.NewProc("UpdateWindow")
+	pGetClientRect                 = user32.NewProc("GetClientRect")
+	pSendMessageW                  = user32.NewProc("SendMessageW")
+	pSetWindowTextW                = user32.NewProc("SetWindowTextW")
+	pLoadCursorW                   = user32.NewProc("LoadCursorW")
+	pLoadIconW                     = user32.NewProc("LoadIconW")
+	pSetCursor                     = user32.NewProc("SetCursor")
+	pMessageBoxW                   = user32.NewProc("MessageBoxW")
+	pSetProcessDPIAware            = user32.NewProc("SetProcessDPIAware")
+	pSetProcessDpiAwarenessContext = user32.NewProc("SetProcessDpiAwarenessContext")
+	pGetDpiForWindow               = user32.NewProc("GetDpiForWindow")
+	pSetWindowPos                  = user32.NewProc("SetWindowPos")
+	pMoveWindow                    = user32.NewProc("MoveWindow")
+	pSetTimer                      = user32.NewProc("SetTimer")
+	pKillTimer                     = user32.NewProc("KillTimer")
+	pSetForegroundWindow           = user32.NewProc("SetForegroundWindow")
+	pOpenClipboard                 = user32.NewProc("OpenClipboard")
+	pEmptyClipboard                = user32.NewProc("EmptyClipboard")
+	pSetClipboardData              = user32.NewProc("SetClipboardData")
+	pCloseClipboard                = user32.NewProc("CloseClipboard")
+	pGetDC                         = user32.NewProc("GetDC")
+	pReleaseDC                     = user32.NewProc("ReleaseDC")
+	pEnableWindow                  = user32.NewProc("EnableWindow")
+	pGetWindowTextW                = user32.NewProc("GetWindowTextW")
+	pGetWindowTextLengthW          = user32.NewProc("GetWindowTextLengthW")
+	pSetFocus                      = user32.NewProc("SetFocus")
+	pGetDlgCtrlID                  = user32.NewProc("GetDlgCtrlID")
+	pGetCursorPos                  = user32.NewProc("GetCursorPos")
+	pInvalidateRect                = user32.NewProc("InvalidateRect")
+	pTrackMouseEvent               = user32.NewProc("TrackMouseEvent")
+	pSetCapture                    = user32.NewProc("SetCapture")
+	pReleaseCapture                = user32.NewProc("ReleaseCapture")
+	pShowCursor                    = user32.NewProc("ShowCursor")
+	pSystemParametersInfoW         = user32.NewProc("SystemParametersInfoW")
 
 	pGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
 	pGlobalAlloc      = kernel32.NewProc("GlobalAlloc")
@@ -143,8 +147,9 @@ const (
 	csHRedraw = 0x0002
 	csVRedraw = 0x0001
 
-	idcArrow     = 32512
-	colorBtnFace = 15
+	idcArrow       = 32512
+	idiApplication = 32512
+	colorBtnFace   = 15
 
 	wmCreate         = 0x0001
 	wmDestroy        = 0x0002
@@ -163,6 +168,15 @@ const (
 	wmCommand        = 0x0111
 	wmTimer          = 0x0113
 	wmCtlColorStatic = 0x0138
+	wmDpiChanged     = 0x02E0
+
+	// DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 is a signed pseudo handle.
+	// Its uintptr form is passed through syscall unchanged to user32.
+	dpiAwarenessContextPerMonitorV2 = ^uintptr(3)
+
+	// SetWindowPos flags used for WM_DPICHANGED's suggested RECT.
+	swpNoZOrder   = 0x0004
+	swpNoActivate = 0x0010
 
 	// idcHand is the hand cursor, used over anything clickable.
 	idcHand = 32649
@@ -319,6 +333,8 @@ func registerClass(name string, wndProc uintptr) error {
 		Style:      csHRedraw | csVRedraw,
 		WndProc:    wndProc,
 		Instance:   hInst,
+		Icon:       loadApplicationIcon(hInst),
+		IconSm:     loadApplicationIcon(hInst),
 		Cursor:     loadCursor(idcArrow),
 		Background: colorBrush(colorBtnFace),
 		ClassName:  className(name),
@@ -342,6 +358,18 @@ const errorClassAlreadyExists = syscall.Errno(1410)
 func loadCursor(id uintptr) uintptr {
 	r, _, _ := pLoadCursorW.Call(0, id)
 	return r
+}
+
+// loadApplicationIcon uses resource id 1 when the release build embedded the
+// supplied ICO. A stock icon preserves a usable title bar in developer builds
+// before that asset is provided.
+func loadApplicationIcon(module uintptr) uintptr {
+	icon, _, _ := pLoadIconW.Call(module, 1)
+	if icon != 0 {
+		return icon
+	}
+	icon, _, _ = pLoadIconW.Call(0, idiApplication)
+	return icon
 }
 
 func colorBrush(index uintptr) uintptr {
@@ -373,6 +401,12 @@ func defWindowProc(hwnd uintptr, m uint32, wParam, lParam uintptr) uintptr {
 
 func moveWindow(hwnd uintptr, x, y, w, h int32) {
 	pMoveWindow.Call(hwnd, uintptr(x), uintptr(y), uintptr(w), uintptr(h), 1)
+}
+
+// setWindowPos applies a rectangle suggested by WM_DPICHANGED.
+func setWindowPos(hwnd uintptr, r rect) {
+	pSetWindowPos.Call(hwnd, 0, uintptr(r.Left), uintptr(r.Top),
+		uintptr(r.Right-r.Left), uintptr(r.Bottom-r.Top), swpNoZOrder|swpNoActivate)
 }
 
 func clientRect(hwnd uintptr) rect {
@@ -486,11 +520,18 @@ func messageBox(title, text string, flags uintptr) int {
 	return int(r)
 }
 
+// fontDPI is updated by WM_DPICHANGED before initFonts creates replacements.
+// A 96-DPI default keeps startup and older Windows deterministic.
+var fontDPI uint32 = 96
+
 func createFont(face string, pt int, weight uintptr) uintptr {
 	hdc, _, _ := pGetDC.Call(0)
 	defer pReleaseDC.Call(0, hdc)
 
-	dpi, _, _ := pGetDeviceCaps.Call(hdc, lognPixelY)
+	dpi := uintptr(fontDPI)
+	if dpi == 0 {
+		dpi, _, _ = pGetDeviceCaps.Call(hdc, lognPixelY)
+	}
 	if dpi == 0 {
 		dpi = 96
 	}

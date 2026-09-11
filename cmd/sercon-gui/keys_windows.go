@@ -115,6 +115,9 @@ func keyPanelProc(hwnd uintptr, m uint32, wParam, lParam uintptr) uintptr {
 			keyPanelLayout()
 		}
 		return 0
+	case wmDpiChanged:
+		keyPanelOnDpiChanged(hwnd, (*rect)(uptrToPtr(lParam)))
+		return 0
 	case wmGetMinMaxInfo:
 		(*minMaxInfo)(uptrToPtr(lParam)).MinTrackSize = point{X: 560, Y: 440}
 		return 0
@@ -141,6 +144,29 @@ func keyPanelProc(hwnd uintptr, m uint32, wParam, lParam uintptr) uintptr {
 		return 0
 	}
 	return defWindowProc(hwnd, m, wParam, lParam)
+}
+
+func keyPanelOnDpiChanged(hwnd uintptr, suggested *rect) {
+	if suggested != nil {
+		setWindowPos(hwnd, *suggested)
+	}
+	// Fonts are process-wide. Rebuild them before reassigning control handles;
+	// the main surface is also recreated lazily on its next paint.
+	fontDPI = updateFontDPI(hwnd)
+	fonts.release()
+	initFonts()
+	if gui != nil {
+		gui.surf.release()
+		paint()
+	}
+	kp := keyWin
+	if kp == nil || kp.destroyed {
+		return
+	}
+	for _, control := range append([]uintptr{kp.pathLabel, kp.hintLabel, kp.list, kp.inputHint, kp.input}, kp.btns...) {
+		setFont(control, fonts.body)
+	}
+	keyPanelLayout()
 }
 
 func keyPanelCreate(hwnd uintptr) {

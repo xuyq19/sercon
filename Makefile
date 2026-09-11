@@ -68,9 +68,15 @@ build:
 # double-clicking the GUI pops up a black window alongside it.
 gui:
 	@mkdir -p $(BINDIR)
+	@rm -f cmd/sercon-gui/resource_windows.syso
+	@if [ -f cmd/sercon-gui/assets/sercon-gui.ico ]; then \
+	  command -v windres >/dev/null || { echo "windres is required to embed the GUI icon"; exit 1; }; \
+	  windres -i cmd/sercon-gui/resource_windows.rc -O coff -o cmd/sercon-gui/resource_windows.syso; \
+	fi
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build \
 	  -ldflags="$(LDFLAGS) -H=windowsgui" \
 	  -o $(BINDIR)/sercon-gui.exe ./cmd/sercon-gui
+	@rm -f cmd/sercon-gui/resource_windows.syso
 	@cp cmd/sercon-gui/sercon-gui.exe.manifest $(BINDIR)/ 2>/dev/null || true
 	@echo "built sercon-gui.exe"
 
