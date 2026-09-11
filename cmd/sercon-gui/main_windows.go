@@ -343,18 +343,8 @@ func wndProc(hwnd uintptr, m uint32, wParam, lParam uintptr) uintptr {
 func onCreate(hwnd uintptr) {
 	gui.hwnd = hwnd
 
-	if err := initCommonControls(); err != nil {
-		dbg("InitCommonControlsEx: %v", err)
-	}
-
 	initFonts()
 	gui.fontsReady = true
-
-	// The key panel is still a real window with real controls, so the class
-	// has to be registered up front even though the panel is created lazily.
-	if err := registerClass(keyClassName, keyPanelProcCallback); err != nil {
-		dbg("register key class: %v", err)
-	}
 
 	onSize()
 
@@ -366,17 +356,6 @@ func onCreate(hwnd uintptr) {
 	refresh()
 	paint()
 	startDemo()
-}
-
-func initCommonControls() error {
-	icc := initCommonControlsEx{
-		Size: uint32(unsafe.Sizeof(initCommonControlsEx{})),
-		ICC:  iccListViewClasses,
-	}
-	if r, _, errno := pInitCommonControlsEx.Call(uintptr(unsafe.Pointer(&icc))); r == 0 {
-		return fmt.Errorf("InitCommonControlsEx: %v", errno)
-	}
-	return nil
 }
 
 func onSize() {

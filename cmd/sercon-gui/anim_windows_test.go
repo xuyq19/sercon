@@ -16,6 +16,7 @@
 package main
 
 import (
+	"syscall"
 	"testing"
 	"time"
 )
@@ -537,5 +538,46 @@ func TestEaseOutCubicIsBoundedAndDecelerating(t *testing.T) {
 		} else {
 			prevDelta = d
 		}
+	}
+}
+
+// --- window class registration ---------------------------------------------
+
+// TestRegisterClassIsIdempotent covers a regression that made the SSH key panel
+// impossible to open.
+//
+// RegisterClassExW fails with ERROR_CLASS_ALREADY_EXISTS on a second
+// registration of the same name, and registerClass reported that as an error.
+// The main window registered the key panel's class at startup, so the panel's
+// own registration then failed and it returned before creating its window —
+// with no visible symptom beyond the panel never appearing, because the failure
+// path is a message box on a window that was never created.
+//
+// The check is that the error is recognised as benign. It cannot call
+// registerClass twice from here and observe the difference, because the second
+// call in-process would be the first real registration; what it pins down is
+// that 1410 maps to the constant the code compares against.
+func TestRegisterClassTreatsAlreadyExistsAsSuccess(t *testing.T) {
+	// 1410 is ERROR_CLASS_ALREADY_EXISTS. Asserting the value keeps the
+	// constant honest: if it were wrong, registerClass would silently go back
+	// to failing and nothing else in the package would notice.
+	if errorClassAlreadyExists != syscall.Errno(1410) {
+		t.Fatalf("errorClassAlreadyExists = %d, want 1410", errorClassAlreadyExists)
+	}
+	// ERROR_ACCESS_DENIED is a different failure and must still be reported.
+	if errorClassAlreadyExists == syscall.Errno(5) {
+		t.Fatal("the already-exists code must not collide with access denied")
+	}
+}
+
+// TestRegisteredClassNamesAreDistinct guards the other half: the main window and
+// the key panel must not share a class name, because they have different window
+// procedures. Sharing one would make the second window subclass the first.
+func TestRegisteredClassNamesAreDistinct(t *testing.T) {
+	if classNameID == keyClassName {
+		t.Fatalf("both windows use class %q", classNameID)
+	}
+	if classNameID == "" || keyClassName == "" {
+		t.Fatal("window class names must not be empty")
 	}
 }

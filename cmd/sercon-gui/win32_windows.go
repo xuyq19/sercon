@@ -30,9 +30,7 @@ var (
 	user32   = syscall.NewLazyDLL("user32.dll")
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
 	gdi32    = syscall.NewLazyDLL("gdi32.dll")
-	comctl32 = syscall.NewLazyDLL("comctl32.dll")
 	shell32  = syscall.NewLazyDLL("shell32.dll")
-	uxtheme  = syscall.NewLazyDLL("uxtheme.dll")
 )
 
 var (
@@ -109,15 +107,7 @@ var (
 	pBeginPaint     = user32.NewProc("BeginPaint")
 	pEndPaint       = user32.NewProc("EndPaint")
 
-	pImageListCreate = comctl32.NewProc("ImageList_Create")
-
-	pInitCommonControlsEx = comctl32.NewProc("InitCommonControlsEx")
-	pShellExecuteW        = shell32.NewProc("ShellExecuteW")
-
-	// SetWindowTheme with an empty theme name turns off the visual style for a
-	// single control. The ListView is drawn by hand, and the themed version
-	// paints its own background and header on top of that.
-	pSetWindowTheme = uxtheme.NewProc("SetWindowTheme")
+	pShellExecuteW = shell32.NewProc("ShellExecuteW")
 )
 
 // Window styles and messages.
@@ -135,23 +125,16 @@ const (
 
 	// Edit control styles. ES_MULTILINE is what makes the key box accept a
 	// paste of several lines at once, which is how these are usually copied.
-	esLeft        = 0x0000
 	esMultiline   = 0x0004
 	esAutoVScroll = 0x0040
 	esWantReturn  = 0x1000
-	esReadOnly    = 0x0800
 	esNoHideSel   = 0x0100
 
 	// ListBox styles.
-	lbsNotify           = 0x0001
-	lbsNoIntegralHeight = 0x0100
+	lbsNotify = 0x0001
 
 	// Button styles.
-	bsPushButton    = 0x00000000
-	bsDefPushButton = 0x00000001
-	bsDisable       = 0x00000001
-
-	cwUseDefault = ^uint32(0) // (uint32)-1
+	bsPushButton = 0x00000000
 
 	swShowNormal = 1
 	swHide       = 0
@@ -159,10 +142,8 @@ const (
 	csHRedraw = 0x0002
 	csVRedraw = 0x0001
 
-	idcArrow       = 32512
-	colorWindow    = 5
-	colorBtnFace   = 15
-	defaultGUIFont = 17
+	idcArrow     = 32512
+	colorBtnFace = 15
 
 	wmCreate         = 0x0001
 	wmDestroy        = 0x0002
@@ -200,69 +181,6 @@ type paintStruct struct {
 	FIncUpdate  int32
 	RgbReserved [32]byte
 }
-
-// Common controls.
-const (
-	ilcColor32      = 0x00000020
-	lvsilSmall      = 1
-	lvmSetImageList = lvmFirst + 2
-)
-
-// ListView custom draw.
-const (
-	nmCustomDraw = 0xFFFFFFF4
-
-	// CDDS_SUBITEM is 0x00020000, not 0x00000002 — the low bit pattern is
-	// CDDS_POSTPAINT, which is a different stage entirely. Subitem callbacks
-	// arrive as 0x00030001.
-	cddsSubItem      = 0x00020000
-	cddsPrePaint     = 0x00000001
-	cddsItemPrePaint = 0x00010001
-	// Subitem callbacks carry both bits, and that is the only stage at which
-	// ISubItem means anything for a report ListView.
-	cddsSubItemPrePaint = cddsItemPrePaint | cddsSubItem
-
-	cdrfDoDefault = 0x00000000
-	cdrfNewFont   = 0x00000002
-	// CDRF_NOTIFYITEMDRAW and CDRF_NOTIFYSUBITEMDRAW share a value; the meaning
-	// depends on which stage returned it.
-	cdrfNotifyItemDraw    = 0x00000020
-	cdrfNotifySubItemDraw = 0x00000020
-)
-
-// ListView.
-const (
-	lvsReport        = 0x0001
-	lvsSingleSel     = 0x0004
-	lvsShowSelAlways = 0x0008
-
-	lvsExGridLines     = 0x00000001
-	lvsExFullRowSelect = 0x00000020
-	lvsExDoubleBuffer  = 0x00010000
-
-	lvmFirst                    = 0x1000
-	lvmDeleteAllItems           = lvmFirst + 9
-	lvmSetItemW                 = lvmFirst + 76
-	lvmInsertItemW              = lvmFirst + 77
-	lvmInsertColumnW            = lvmFirst + 97
-	lvmSetExtendedListViewStyle = lvmFirst + 54
-	lvmGetNextItem              = lvmFirst + 12
-
-	lvcfFmt     = 0x0001
-	lvcfWidth   = 0x0002
-	lvcfText    = 0x0004
-	lvcfSubItem = 0x0008
-
-	lvcfmtLeft = 0x0000
-
-	lvifText = 0x0001
-
-	lvniSelected = 0x0002
-
-	iccListViewClasses = 0x00000001
-
-	lvmSetRedraw = 0x100B
-)
 
 // ListBox.
 const (
@@ -347,84 +265,6 @@ type minMaxInfo struct {
 	MaxTrackSize point
 }
 
-type initCommonControlsEx struct {
-	Size uint32
-	ICC  uint32
-}
-
-// lvColumn mirrors LVCOLUMNW. Field order and widths matter: the control reads
-// the struct by member offset, so a missing tail field would shift nothing but
-// a reordered one would corrupt every column.
-type lvColumn struct {
-	Mask       uint32
-	Fmt        int32
-	Cx         int32
-	PszText    *uint16
-	CchTextMax int32
-	ISubItem   int32
-	IImage     int32
-	IOrder     int32
-	CxMin      int32
-	CxDefault  int32
-	CxIdeal    int32
-}
-
-// lvItem mirrors LVITEMW.
-type lvItem struct {
-	Mask       uint32
-	IItem      int32
-	ISubItem   int32
-	State      uint32
-	StateMask  uint32
-	PszText    *uint16
-	CchTextMax int32
-	IImage     int32
-	LParam     uintptr
-	IIndent    int32
-	IGroupID   int32
-	CColumns   uint32
-	PuColumns  *uint32
-	PiColFmt   *int32
-	IGroup     int32
-}
-
-// nmhdr mirrors NMHDR, the header every WM_NOTIFY payload starts with.
-type nmhdr struct {
-	HwndFrom uintptr
-	IdFrom   uintptr
-	Code     uint32
-}
-
-// nmCustomDrawInfo mirrors NMCUSTOMDRAW.
-type nmCustomDrawInfo struct {
-	Hdr         nmhdr
-	DwDrawStage uint32
-	Hdc         uintptr
-	Rc          rect
-	DwItemSpec  uintptr
-	UItemState  uint32
-	LItemlParam uintptr
-}
-
-// nmlvCustomDraw mirrors NMLVCUSTOMDRAW: an NMCUSTOMDRAW followed by the
-// ListView-specific colour fields. Only DwDrawStage, DwItemSpec, ISubItem and
-// ClrText are read or written here, but the whole layout has to be right
-// because the control hands over a pointer to the real struct.
-type nmlvCustomDraw struct {
-	Nmcd        nmCustomDrawInfo
-	ClrText     uint32
-	ClrTextBk   uint32
-	ISubItem    int32
-	DwItemType  uint32
-	ClrFace     uint32
-	IIconEffect int32
-	IIconPhase  int32
-	IPartId     int32
-	IStateId    int32
-	RcText      rect
-	UAlign      uint32
-}
-
 func utf16Ptr(s string) *uint16 {
 	p, err := syscall.UTF16PtrFromString(s)
 	if err != nil {
@@ -463,6 +303,14 @@ func className(name string) *uint16 {
 	return p
 }
 
+// registerClass registers a window class, tolerating one that already exists.
+//
+// RegisterClassExW fails with ERROR_CLASS_ALREADY_EXISTS when the name is
+// taken, and reporting that as an error is wrong here: registering a class
+// twice is not a failure, it is a no-op. Treating it as one meant the second
+// caller bailed out before creating its window, which is exactly how the SSH
+// key panel came to be unopenable — the class was registered at startup and the
+// panel's own registration then reported a failure that was not one.
 func registerClass(name string, wndProc uintptr) error {
 	hInst, _, _ := pGetModuleHandleW.Call(0)
 
@@ -478,10 +326,17 @@ func registerClass(name string, wndProc uintptr) error {
 
 	r, _, errno := pRegisterClassExW.Call(uintptr(unsafe.Pointer(&cls)))
 	if r == 0 {
+		if errno == errorClassAlreadyExists {
+			return nil
+		}
 		return fmt.Errorf("RegisterClassExW(%s): %v", name, errno)
 	}
 	return nil
 }
+
+// errorClassAlreadyExists is ERROR_CLASS_ALREADY_EXISTS. The syscall package
+// does not declare it.
+const errorClassAlreadyExists = syscall.Errno(1410)
 
 func loadCursor(id uintptr) uintptr {
 	r, _, _ := pLoadCursorW.Call(0, id)
@@ -670,21 +525,6 @@ func setTextColor(hdc, color uintptr) uintptr {
 
 func setBkMode(hdc, mode uintptr) {
 	_, _, _ = pSetBkMode.Call(hdc, mode)
-}
-
-// createImageList makes a small image list with no images in it.
-//
-// Its only purpose is the row height: a ListView sizes every row to the height
-// of its small image list, and there is no other supported way to get padding
-// inside a report row. Without this the rows are as tight as the font allows,
-// which is a large part of why default ListViews read as dated.
-func createImageList(rowHeight int) uintptr {
-	r, _, _ := pImageListCreate.Call(1, uintptr(rowHeight), ilcColor32, 1, 1)
-	return r
-}
-
-func setImageList(list, imageList uintptr) {
-	pSendMessageW.Call(list, lvmSetImageList, lvsilSmall, imageList)
 }
 
 // shellOpen hands a path to the shell, which is how a folder gets opened in
